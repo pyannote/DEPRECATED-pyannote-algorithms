@@ -39,6 +39,7 @@ setup(
     install_requires=[
         'pyannote.core >= 0.0.2',
         'scikit-learn >=0.14',
+        'munkres >= 1.0.6',
     ],
     # versioneer
     version=versioneer.get_version(),
