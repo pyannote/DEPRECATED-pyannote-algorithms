@@ -38,6 +38,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'pyannote.core >= 0.0.2',
+        'scikit-learn >=0.14',
     ],
     # versioneer
     version=versioneer.get_version(),
