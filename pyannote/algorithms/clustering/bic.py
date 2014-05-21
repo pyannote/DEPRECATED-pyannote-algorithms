@@ -21,11 +21,12 @@
 from hac import HierarchicalAgglomerativeClustering
 from hac import HACModel
 from hac import HACStop
-from hac import HACConstraint
 from pyannote.algorithms.stats.gaussian import Gaussian
 
+
 class BICModel(HACModel):
-    """"""
+    """
+    """
 
     def __init__(self, covariance_type='full', penalty_coef=3.5):
         super(BICModel, self).__init__()
@@ -107,7 +108,7 @@ class BICStop(HACStop):
 
     def finalize(self, history=None, **kwargs):
         n = len(history.iterations)
-        return history[n-1]
+        return history[n - 1]
 
 
 class BICClustering(HierarchicalAgglomerativeClustering):
