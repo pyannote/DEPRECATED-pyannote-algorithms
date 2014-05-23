@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -48,6 +48,29 @@ class HACIteration(
     def __new__(cls, merged_clusters, similarity, new_cluster):
         return super(HACIteration, cls).__new__(
             cls, merged_clusters, similarity, new_cluster)
+
+
+# http://stackoverflow.com/questions/3318625/
+# efficient-bidirectional-hash-table-in-python
+
+# bi-directional dictionary
+class bidict(dict):
+
+    def __init__(self, *args, **kwargs):
+        super(bidict, self).__init__(*args, **kwargs)
+        self.inverse = {}
+        for key, value in self.iteritems():
+            self.inverse.setdefault(value, []).append(key)
+
+    def __setitem__(self, key, value):
+        super(bidict, self).__setitem__(key, value)
+        self.inverse.setdefault(value, []).append(key)
+
+    def __delitem__(self, key):
+        self.inverse.setdefault(self[key], []).remove(key)
+        if self[key] in self.inverse and not self.inverse[self[key]]:
+            del self.inverse[self[key]]
+        super(bidict, self).__delitem__(key)
 
 
 class HACHistory(object):
@@ -107,10 +130,24 @@ class HACHistory(object):
             Clustering status after `n` iterations
 
         """
-        annotation = self.annotation.copy()
+
+        # bi-directional dictionary
+        translation = bidict()
+
         for i in xrange(n):
+
             iteration = self.iterations[i]
-            translation = {c: iteration.new_cluster
-                           for c in iteration.merged_clusters}
-            annotation = annotation % translation
-        return annotation
+            merged_clusters = iteration.merged_clusters
+            new_cluster = iteration.new_cluster
+
+            for merged_cluster in merged_clusters:
+
+                # map merged_cluster to new_cluster
+                translation[merged_cluster] = new_cluster
+
+                # clusters previously mapped to this merged_cluster
+                # are also remapped to new_cluster
+                for cluster in translation.inverse[merged_cluster]:
+                    translation[cluster] = new_cluster
+
+        return self.annotation % translation
