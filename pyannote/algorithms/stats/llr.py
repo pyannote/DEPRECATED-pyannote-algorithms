@@ -35,12 +35,14 @@ class LLR(object):
     def _get_scores_ratios(self, X, Y, nbins=100):
 
         finite = np.isfinite(X)
-        positive = X[np.where(Y == 1) and finite]
-        negative = X[np.where(Y == 0) and finite]
+        positive = X[np.where((Y == 1) & finite)]
+        negative = X[np.where((Y == 0) & finite)]
 
         # todo: smarter bins (bayesian blocks)
         # see jakevdp.github.io/blog/2012/09/12/dynamic-programming-in-python/
-        bins = np.arange(np.min(X), np.max(X), (np.max(X) - np.min(X)) / nbins)
+        m = min(np.min(positive), np.min(negative))
+        M = max(np.max(positive), np.max(positive))
+        bins = np.arange(m, M, (M - m) / nbins)
 
         # histograms
         p, _ = np.histogram(positive, bins=bins, density=True)
