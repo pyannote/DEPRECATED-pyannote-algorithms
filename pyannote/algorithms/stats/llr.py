@@ -41,7 +41,7 @@ class LLR(object):
         # todo: smarter bins (bayesian blocks)
         # see jakevdp.github.io/blog/2012/09/12/dynamic-programming-in-python/
         m = min(np.min(positive), np.min(negative))
-        M = max(np.max(positive), np.max(positive))
+        M = max(np.max(positive), np.max(negative))
         bins = np.arange(m, M, (M - m) / nbins)
 
         # histograms
