@@ -23,40 +23,4 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-import versioneer
-versioneer.versionfile_source = 'pyannote/algorithms/_version.py'
-versioneer.versionfile_build = versioneer.versionfile_source
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'pyannote-algorithms-'
-
-from setuptools import setup, find_packages
-
-setup(
-
-    # package
-    namespace_packages=['pyannote'],
-    packages=find_packages(),
-    install_requires=[
-        'pyannote.core >= 0.0.2',
-        'scikit-learn >=0.14',
-        'munkres >= 1.0.6',
-    ],
-    # versioneer
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
-
-    # PyPI
-    name='pyannote.algorithms',
-    description=('PyAnnote algorithms'),
-    author='Hervé Bredin',
-    author_email='bredin@limsi.fr',
-    url='http://herve.niderb.fr/',
-    classifiers=[
-        "Development Status :: 4 - Beta",
-        "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: MIT License",
-        "Natural Language :: English",
-        "Programming Language :: Python :: 2.7",
-        "Topic :: Scientific/Engineering"
-    ],
-)
+from __future__ import unicode_literals
