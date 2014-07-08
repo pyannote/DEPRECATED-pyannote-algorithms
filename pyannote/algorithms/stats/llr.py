@@ -34,8 +34,9 @@ class LLR(object):
 
     def _get_scores_ratios(self, X, Y, nbins=100):
 
-        positive = X[np.where(Y == 1)]
-        negative = X[np.where(Y == 0)]
+        finite = np.isfinite(X)
+        positive = X[np.where(Y == 1) and finite]
+        negative = X[np.where(Y == 0) and finite]
 
         # todo: smarter bins (bayesian blocks)
         # see jakevdp.github.io/blog/2012/09/12/dynamic-programming-in-python/
