@@ -169,7 +169,7 @@ class ViterbiHMM(object):
 
                 prev_label = label
 
-        return (1. * transition.T / np.sum(transition, axis=1)).T
+        return np.log(1. * transition.T / np.sum(transition, axis=1)).T
 
     def _fit_model(self, data):
         """Fit GMM to `data`"""
