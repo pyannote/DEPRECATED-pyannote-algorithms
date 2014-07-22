@@ -29,7 +29,7 @@ import numpy as np
 import itertools
 from ..stats.lbg import LBG
 from .viterbi import viterbi_decoding, constrained_viterbi_decoding
-from pyannote.core import Segment, Annotation
+from pyannote.core import Annotation
 
 
 def pairwise(iterable):
@@ -205,6 +205,29 @@ class ViterbiHMM(object):
             data = self._get_target_data(A, F, target)
             self._model[target] = self._fit_model(data)
 
+    def _sequence_to_annotation(self, sequence, sliding_window):
+        """Convert state sequence to labeled annotation"""
+
+        # list of transition indices
+        boundaries = list(np.where(np.diff(sequence))[0])
+        boundaries = [-1] + boundaries + [len(sequence)]
+
+        # prepare result annotation
+        annotation = Annotation()
+
+        for start, end in pairwise(boundaries):
+
+            # infer segment from transition indices and sliding window
+            segment = sliding_window.rangeToSegment(start, end - start)
+
+            # get actual label from sequence
+            label = self.targets[sequence[start + 1]]
+
+            # save to annotation
+            annotation[segment] = label
+
+        return annotation
+
     def apply(self, features):
         """Apply Viterbi decoding
 
@@ -218,7 +241,7 @@ class ViterbiHMM(object):
         """
 
         X = features.data
-        sw = features.sliding_window
+        sliding_window = features.sliding_window
 
         # compute emission probability
         emission = np.vstack([self._model[target].score(X)
@@ -227,38 +250,27 @@ class ViterbiHMM(object):
         # Minimum duration constraints
         if self.min_duration:
 
+            # initialize with no constraint
+            # (min-duration = 1 sample)
             constraints = np.ones((len(self.targets)), dtype=int)
 
             for t, target in enumerate(self.targets):
                 if target in self.min_duration:
                     duration = self.min_duration[target]
-                    _, n = sw.segmentToRange(Segment(0, duration))
-                    constraints[t] = n
+                    constraints[t] = sliding_window.durationToSamples(duration)
 
             # Constrained Viterbi decoding
             sequence = constrained_viterbi_decoding(emission, self._transition,
                                                     self._initial, constraints)
+
         else:
 
             # Viterbi decoding
             sequence = viterbi_decoding(emission, self._transition,
                                         self._initial)
 
-        # list of transition indices
-        boundaries = [-1] + list(np.where(np.diff(sequence))[0]) + [X.shape[0]]
 
-        # prepare result annotation
-        annotation = Annotation()
-
-        for start, end in pairwise(boundaries):
-
-            # infer segment from transition indices and sliding window
-            segment = sw.rangeToSegment(start, end - start)
-
-            # get actual label from sequence
-            label = self.targets[sequence[start + 1]]
-
-            # save to annotation
-            annotation[segment] = label
+        # convert state sequence to annotation
+        annotation = self._sequence_to_annotation(sequence, sliding_window)
 
         return annotation
