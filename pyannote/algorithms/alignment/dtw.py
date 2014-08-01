@@ -50,20 +50,30 @@ class DynamicTimeWarping(object):
         (vertical and horizontal) sequences to be aligned.
     vcost : float, optional
         Cost for vertical paths (i, j) --> (i+1, j)
+        Reducing `vcost` encourages paths where several v-elements are aligned
+        with the same h-element (i.e. fine-to-coarse alignments)
     hcost : float, optional
         Cost for horizontal paths (i, j) --> (i, j+1)
+        Reducing `hcost` encourages paths where several h-elements are aligned
+        with the same v-element (i.e. coarse-to-fine alignments)
     dcost : float, optional
         Cost for diagonal paths (i, j) --> (i+1, j+1)
     distance_func : func, optional
         Function (vitem, hitem) --> distance between items
-    precomputed : np.array, optional
+    distance : np.array, optional
         (H, W)-shaped array with pre-computed distances
+    mask_func : func, optional
+        Function (vitem, hitem) --> mask
+    mask : np.array, optional
+        (H, W)-shaped boolean array with pre-computed mask.
 
     """
 
     def __init__(self, vsequence, hsequence,
-                 distance_func=None, precomputed=None,
-                 vcost=1., hcost=1., dcost=1.):
+                 vcost=1., hcost=1., dcost=1.,
+                 distance_func=None, distance=None,
+                 mask_func=None, mask=None,
+                 vallow=True, hallow=True):
 
         super(DynamicTimeWarping, self).__init__()
 
@@ -71,18 +81,25 @@ class DynamicTimeWarping(object):
         self.vsequence = vsequence
         self.hsequence = hsequence
 
+        H, W = len(vsequence), len(hsequence)
+
         # cost for elementary paths
         self.vcost = vcost  # vertical
         self.hcost = hcost  # horizontal
         self.dcost = dcost  # diagonal
 
+        # allow vertical paths
+        self.v_ok = vallow
+        # allow horizontal paths
+        self.h_ok = hallow
+
         # precomputed distance matrix
-        if precomputed is not None:
-            self._distance = precomputed
+        if distance is not None:
+            assert distance.shape == (H, W)
+            self._distance = distance
 
         # on-the-fly distance computation
         elif distance_func is not None:
-            H, W = len(vsequence), len(hsequence)
             self._distance = np.empty((H, W))
             self._distance[:] = np.NAN
             self.distance_func = distance_func
@@ -91,9 +108,25 @@ class DynamicTimeWarping(object):
         else:
             raise ValueError('')
 
-    def _get_distance(self, v, h):
+        # precomputed mask matrix
+        if mask is not None:
+            assert mask.shape == (H, W)
+            self._mask = mask
 
-        # if distance is not compute already
+        # on-the-fly mask computation
+        elif mask_func is not None:
+            self._mask = np.empty((H, W))
+            self._mask[:] = np.NAN
+            self.mask_func = mask_func
+
+        # no mask
+        else:
+            self._mask = True * np.ones((H, W))
+
+    def _get_distance(self, v, h):
+        """Returns distance between elements v and h"""
+
+        # if distance is not computed already
         # do it once and for all
         if np.isnan(self._distance[v, h]):
             vitem = self.vsequence[v]
@@ -102,32 +135,72 @@ class DynamicTimeWarping(object):
 
         return self._distance[v, h]
 
+    def _get_mask(self, v, h):
+        """Returns mask at position (v, h)"""
+
+        # if mask is not computed already
+        # do it once and for all
+        if np.isnan(self._mask[v, h]):
+            vitem = self.vsequence[v]
+            hitem = self.hsequence[h]
+            self._mask[v, h] = self.mask_func(vitem, hitem)
+
+        return self._mask[v, h]
+
     def _get_cost(self):
+        """Compute cost matrix (taking mask into account)"""
 
         height = len(self.vsequence)
         width = len(self.hsequence)
 
+        # initialize with infinite cost
         cost = np.inf * np.ones((height, width))
 
         # initialize first row and first column
         cost[0, 0] = self._get_distance(0, 0)
+
+        # update first row of cost matrix
         for v in range(1, height):
+
+            # rest of the first row should remain infinite
+            # as soon as one element is masked
+            if not self._get_mask(v, 0):
+                break
+
+            # update cost based on the previous one on the same row
             cost[v, 0] = cost[v - 1, 0] + self.vcost * self._get_distance(v, 0)
+
+        # update first column of cost matrix
         for h in range(1, width):
+
+            # rest of the first column should remain infinite
+            # as soon as one element is masked
+            if not self._get_mask(0, h):
+                break
+
+            # update cost based on the previous one on the same column
             cost[0, h] = cost[0, h - 1] + self.hcost * self._get_distance(0, h)
 
         for v in range(1, height):
             for h in range(1, width):
+
+                # no need to update cost if this element is masked
+                # (it will remain infinite)
+                if not self._get_mask(v, h):
+                    continue
+
                 d = self._get_distance(v, h)
-                dv = cost[v - 1, h] + self.vcost * d
-                dh = cost[v, h - 1] + self.hcost * d
+
+                dv = (cost[v - 1, h] + self.vcost * d) if self.v_ok else np.inf
+                dh = (cost[v, h - 1] + self.hcost * d) if self.h_ok else np.inf
                 dd = cost[v - 1, h - 1] + self.dcost * d
+
                 cost[v, h] = min(dv, dh, dd)
 
         return cost
 
     def get_path(self):
-        """Get lowest cost path
+        """Get alignment path
 
         Returns
         -------
