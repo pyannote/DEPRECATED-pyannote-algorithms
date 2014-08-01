@@ -32,6 +32,14 @@ from __future__ import unicode_literals
 
 import numpy as np
 
+STARTS_BEFORE = 1
+STARTS_AFTER = 2
+ENDS_BEFORE = 4
+ENDS_AFTER = 8
+
+STARTS_WITH = STARTS_BEFORE | STARTS_AFTER
+ENDS_WITH = ENDS_BEFORE | ENDS_AFTER
+
 
 class DynamicTimeWarping(object):
     """
@@ -149,3 +157,62 @@ class DynamicTimeWarping(object):
 
         # reverse path so that it goes from top/left to bottom/right
         return path[::-1]
+
+    def get_alignment(self):
+        """Get detailed alignment information
+
+        Returns
+        -------
+        alignment : dict
+            Dictionary indexed by aligned (vitem, hitem) pairs.
+            Values are bitwise union (|) of the following flags indicating
+            if items start (or end) simultaneously or sequentially:
+            STARTS_AFTER, STARTS_BEFORE, ENDS_AFTER, ENDS_BEFORE
+            with STARTS_WITH = STARTS_BEFORE | STARTS_AFTER and
+            ENDS_WITH = ENDS_AFTER | ENDS_BEFORE and
+        """
+
+        path = self.get_path()
+
+        v2h, h2v = {}, {}
+        alignment = {}
+
+        for _v, _h in path:
+            v = self.vsequence[_v]
+            r = self.hsequence[_h]
+            v2h[v] = v2h.get(v, []) + [r]
+            h2v[r] = h2v.get(r, []) + [v]
+
+        # vertical foward pass
+        _h = -1
+        for v in self.vsequence:
+            h = min(v2h[v])
+            if h != _h:
+                alignment[v, h] = alignment.get((v, h), 0) | STARTS_AFTER
+                _h = h
+
+        # horizontal forward pass
+        _v = -1
+        for h in self.hsequence:
+            v = min(h2v[h])
+            if v != _v:
+                alignment[v, h] = alignment.get((v, h), 0) | STARTS_BEFORE
+                _v = v
+
+        # vertical backward pass
+        _h = -1
+        for v in reversed(self.vsequence):
+            h = max(v2h[v])
+            if h != _h:
+                alignment[v, h] = alignment.get((v, h), 0) | ENDS_BEFORE
+                _h = h
+
+        # horizontal backward pass
+        _v = -1
+        for h in reversed(self.hsequence):
+            v = max(h2v[h])
+            if v != _v:
+                alignment[v, h] = alignment.get((v, h), 0) | ENDS_AFTER
+                _v = v
+
+        return alignment
