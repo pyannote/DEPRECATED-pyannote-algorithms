@@ -32,66 +32,99 @@ from __future__ import unicode_literals
 
 import numpy as np
 
+# vertical item starts before/after horizontal item does
 STARTS_BEFORE = 1
 STARTS_AFTER = 2
+
+# items start simultaneously
+STARTS_WITH = STARTS_BEFORE | STARTS_AFTER
+
+# vertical item ends before/after horizontal item does
 ENDS_BEFORE = 4
 ENDS_AFTER = 8
 
-STARTS_WITH = STARTS_BEFORE | STARTS_AFTER
+# items end simultaneously
 ENDS_WITH = ENDS_BEFORE | ENDS_AFTER
 
 
 class DynamicTimeWarping(object):
-    """
+    """Dynamic time warping
+
+    Implements standard dynamic time warping between two (vertical and
+    horizontal) sequences of length V and H respectively.
+
+            * ────────────────>   horizontal
+            │ *                    sequence
+            │   *
+            │     * * *
+            │           *
+            │             *
+            V               *
+
+         vertical
+         sequence
 
     Parameters
     ----------
-    vsequence, hsequence : iterable
-        (vertical and horizontal) sequences to be aligned.
-    vcost : float, optional
-        Cost for vertical paths (i, j) --> (i+1, j)
-        Reducing `vcost` encourages paths where several v-elements are aligned
-        with the same h-element (i.e. fine-to-coarse alignments)
-    hcost : float, optional
-        Cost for horizontal paths (i, j) --> (i, j+1)
-        Reducing `hcost` encourages paths where several h-elements are aligned
-        with the same v-element (i.e. coarse-to-fine alignments)
-    dcost : float, optional
-        Cost for diagonal paths (i, j) --> (i+1, j+1)
-    distance_func : func, optional
-        Function (vitem, hitem) --> distance between items
-    distance : np.array, optional
-        (H, W)-shaped array with pre-computed distances
-    mask_func : func, optional
-        Function (vitem, hitem) --> mask
-    mask : np.array, optional
-        (H, W)-shaped boolean array with pre-computed mask.
 
+    vsequence, hsequence : iterable
+        Vertical and horizontal sequences to align.
+
+    distance : (V, H)-shaped array, optional
+        Pre-computed pairwise distance matrix D where D[v, h] provides the
+        distance between the vth item of the vertical sequence and the hth item
+        of the horizontal one.
+
+    distance_func : func, optional
+        Distance function taking two arguments `vitem` (any item from the
+        vertical sequence) and `hitem` (any item from the horizontal sequence)
+        and returning their distance as float.
+        `distance_func` must be provided in case pre-computed `distance` is not
+        available.
+
+    mask : (V, H)-shaped boolean array, optional
+        Pre-computed constraint mask M where M[v, h] is True when aligning the
+        vth item of the vertical sequence and the hth item of the horizontal
+        sequence is permitted, and False when it is not.
+
+    mask_func : func, optional
+        Mask function taking two required arguments (`v`, `h`) and two optional
+        arguments (`vitem`, `hitem`) and returning True when aligning them is
+        permitted and False otherwise. Defaults to all True.
+
+    vcost, hcost, dcost : float, optional
+        Extra cost added to each vertical, horizontal and diagonal move.
+        For instance, a positive `vcost` will encourage horizontal and diagonal
+        paths. All three values default to 0.
+
+    no_vertical, no_horizontal : boolean, optional
+        Constrain dynamic time warping to contain only non-vertical (resp.
+        non-horizontal) moves. Defaults to False (i.e. no constraint).
     """
 
     def __init__(self, vsequence, hsequence,
-                 vcost=1., hcost=1., dcost=1.,
                  distance_func=None, distance=None,
+                 vcost=0., hcost=0., dcost=0.,
                  mask_func=None, mask=None,
-                 vallow=True, hallow=True):
+                 no_vertical=True, no_horizontal=True):
 
         super(DynamicTimeWarping, self).__init__()
 
-        # sequences to be aligned
+        # vertical and horizontal sequences to be aligned
         self.vsequence = vsequence
         self.hsequence = hsequence
 
         H, W = len(vsequence), len(hsequence)
 
-        # cost for elementary paths
+        # extra cost for each elementary move
         self.vcost = vcost  # vertical
         self.hcost = hcost  # horizontal
         self.dcost = dcost  # diagonal
 
-        # allow vertical paths
-        self.v_ok = vallow
-        # allow horizontal paths
-        self.h_ok = hallow
+        # no vertical move
+        self.no_vertical = no_vertical
+        # no horizontal move
+        self.no_horizontal = no_horizontal
 
         # precomputed distance matrix
         if distance is not None:
@@ -119,12 +152,12 @@ class DynamicTimeWarping(object):
             self._mask[:] = np.NAN
             self.mask_func = mask_func
 
-        # no mask
+        # defaults to no mask
         else:
             self._mask = True * np.ones((H, W))
 
     def _get_distance(self, v, h):
-        """Returns distance between elements v and h"""
+        """Get distance between vth and hth items"""
 
         # if distance is not computed already
         # do it once and for all
@@ -136,14 +169,14 @@ class DynamicTimeWarping(object):
         return self._distance[v, h]
 
     def _get_mask(self, v, h):
-        """Returns mask at position (v, h)"""
+        """Get mask at position (v, h)"""
 
         # if mask is not computed already
         # do it once and for all
         if np.isnan(self._mask[v, h]):
             vitem = self.vsequence[v]
             hitem = self.hsequence[h]
-            self._mask[v, h] = self.mask_func(vitem, hitem)
+            self._mask[v, h] = self.mask_func(v, vitem, h, hitem)
 
         return self._mask[v, h]
 
@@ -168,7 +201,7 @@ class DynamicTimeWarping(object):
                 break
 
             # update cost based on the previous one on the same row
-            cost[v, 0] = cost[v - 1, 0] + self.vcost * self._get_distance(v, 0)
+            cost[v, 0] = self.vcost + cost[v - 1, 0] + self._get_distance(v, 0)
 
         # update first column of cost matrix
         for h in range(1, width):
@@ -179,7 +212,7 @@ class DynamicTimeWarping(object):
                 break
 
             # update cost based on the previous one on the same column
-            cost[0, h] = cost[0, h - 1] + self.hcost * self._get_distance(0, h)
+            cost[0, h] = self.hcost + cost[0, h - 1] + self._get_distance(0, h)
 
         for v in range(1, height):
             for h in range(1, width):
@@ -189,18 +222,16 @@ class DynamicTimeWarping(object):
                 if not self._get_mask(v, h):
                     continue
 
-                d = self._get_distance(v, h)
+                dv = self.vcost + cost[v - 1, h]
+                dh = self.hcost + cost[v, h - 1]
+                dd = self.dcost + cost[v - 1, h - 1]
 
-                dv = cost[v - 1, h] + self.vcost * d
-                dh = cost[v, h - 1] + self.hcost * d
-                dd = cost[v - 1, h - 1] + self.dcost * d
-
-                cost[v, h] = min(dv, dh, dd)
+                cost[v, h] = self._get_distance(v, h) + min(dv, dh, dd)
 
         return cost
 
     def get_path(self):
-        """Get alignment path
+        """Get path with minimum cost from (0, 0) to (V-1, H-1)
 
         Returns
         -------
@@ -219,9 +250,9 @@ class DynamicTimeWarping(object):
         while v > 0 or h > 0:
 
             candidates = [(v - 1, h - 1)]
-            if self.v_ok:
+            if not self.no_vertical:
                 candidates.append((v - 1, h))
-            if self.h_ok:
+            if not self.no_horizontal:
                 candidates.append((v, h - 1))
 
             # backtrack one step
