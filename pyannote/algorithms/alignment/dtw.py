@@ -253,43 +253,63 @@ class DynamicTimeWarping(object):
 
         path = self.get_path()
 
+        # dictionary indexed by vsequence items (resp. hsequence items)
+        # for each v-item, contains the list of integer index of align h-items
+        # and reciprocally
         v2h, h2v = {}, {}
-        alignment = {}
-
         for _v, _h in path:
             v = self.vsequence[_v]
             r = self.hsequence[_h]
-            v2h[v] = v2h.get(v, []) + [r]
-            h2v[r] = h2v.get(r, []) + [v]
+            v2h[v] = v2h.get(v, []) + [_h]
+            h2v[r] = h2v.get(r, []) + [_v]
 
-        # vertical foward pass
-        _h = -1
+        # see docstring
+        alignment = {}
+
+        # vertical foward pass (i.e. in vsequence chronological order)
+        _h = None
         for v in self.vsequence:
-            h = min(v2h[v])
+
+            # find first h-item aligned with v
+            h = self.hsequence[min(v2h[v])]
+
+            # if it's a new one, v starts after h does
             if h != _h:
                 alignment[v, h] = alignment.get((v, h), 0) | STARTS_AFTER
                 _h = h
 
-        # horizontal forward pass
-        _v = -1
+        # horizontal forward pass (i.e. in hsequence chronological order)
+        _v = None
         for h in self.hsequence:
-            v = min(h2v[h])
+
+            # find first v-item aligned with h
+            v = self.vsequence[min(h2v[h])]
+
+            # if it is a new one, v starts before h does
             if v != _v:
                 alignment[v, h] = alignment.get((v, h), 0) | STARTS_BEFORE
                 _v = v
 
-        # vertical backward pass
-        _h = -1
+        # vertical backward pass (i.e. in vsequence anti-chronological order)
+        _h = None
         for v in reversed(self.vsequence):
-            h = max(v2h[v])
+
+            # find last h-item aligned with v
+            h = self.hsequence[max(v2h[v])]
+
+            # if it is a new one, v ends before h does
             if h != _h:
                 alignment[v, h] = alignment.get((v, h), 0) | ENDS_BEFORE
                 _h = h
 
-        # horizontal backward pass
-        _v = -1
+        # horizontal backward pass (i.e. in hsequence anti-chronological order)
+        _v = None
         for h in reversed(self.hsequence):
-            v = max(h2v[h])
+
+            # find last v-item aligned with h
+            v = self.vsequence[max(h2v[h])]
+
+            # if it is a new one, v ends after h does
             if v != _v:
                 alignment[v, h] = alignment.get((v, h), 0) | ENDS_AFTER
                 _v = v
