@@ -191,8 +191,8 @@ class DynamicTimeWarping(object):
 
                 d = self._get_distance(v, h)
 
-                dv = (cost[v - 1, h] + self.vcost * d) if self.v_ok else np.inf
-                dh = (cost[v, h - 1] + self.hcost * d) if self.h_ok else np.inf
+                dv = cost[v - 1, h] + self.vcost * d
+                dh = cost[v, h - 1] + self.hcost * d
                 dd = cost[v - 1, h - 1] + self.dcost * d
 
                 cost[v, h] = min(dv, dh, dd)
@@ -218,10 +218,16 @@ class DynamicTimeWarping(object):
         # backtrack from bottom/right to top/left
         while v > 0 or h > 0:
 
+            candidates = [(v - 1, h - 1)]
+            if self.v_ok:
+                candidates.append((v - 1, h))
+            if self.h_ok:
+                candidates.append((v, h - 1))
+
             # backtrack one step
             v, h = min(
                 # go left, go up or both?
-                [(v - 1, h), (v, h - 1), (v - 1, h - 1)],
+                candidates,
                 # use cost matrix to choose among allowed paths
                 key=lambda (i, j): np.inf if i < 0 or j < 0 else cost[i, j]
             )
