@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS 
+# Copyright (c) 2014 CNRS
 # Antoine LAURENT (http://www.antoine-laurent.fr)
 # Hervé BREDIN (http://herve.niderb.fr)
 
@@ -14,8 +14,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -27,175 +27,337 @@
 
 from __future__ import unicode_literals
 
-from pyannote.core import T, TStart
-import re
+import itertools
+import numpy as np
 import networkx as nx
 
+from pyannote.core import T
+from dtw import DynamicTimeWarping
+from dtw import STARTS_BEFORE, STARTS_WITH, STARTS_AFTER
+from dtw import ENDS_BEFORE, ENDS_WITH, ENDS_AFTER
 
-class WordsToSentencesAlignment(object):
-    """
+
+class OneToAnyMixin:
+    """This mixin forbids vertical moves during DTW"""
+    @property
+    def no_vertical(self):
+        return True
+
+    @property
+    def no_horizontal(self):
+        return False
+
+
+class AnyToOneMixin:
+    """This mixin forbids horizontal moves during DTW"""
+    @property
+    def no_vertical(self):
+        return False
+
+    @property
+    def no_horizontal(self):
+        return True
+
+
+class BaseTranscriptionAlignment(object):
+    """Base transcriptions alignment algorithm
+
+    This algorithm will temporally align two transcriptions
+    (called `vertical` and `horizontal` following standard DTW representation).
+
+            * ────────────────>   horizontal
+            │ *
+            │   *
+            │     * * *
+            │           *
+            │             *
+            V               *
+
+         vertical
+
+    Whenever two drifting times are merged, it will keep the `vertical` one.
+
     Parameters
     ----------
-    punctuation : boolean, optional
+    vattribute : str
+    hattribute : str
+
     """
 
-    def __init__(self, punctuation=True):
-        super(WordsToSentencesAlignment, self).__init__()
-        self.punctuation = punctuation
+    @property
+    def no_vertical(self):
+        return False
 
-    def _clean_sentence(self, sentenceWords):
-        sentenceClean = re.sub(r'\([^\)]+\)','', sentenceWords)
-        sentenceClean = re.sub(r'\[[^\]]+\]','', sentenceClean)
-        #sentenceClean = re.sub('[.!,;?":]','', sentenceClean)
-            
-        sentenceClean = re.sub(r'^[\.!,;?":]+','', sentenceClean)
+    @property
+    def no_horizontal(self):
+        return False
 
-        sentenceClean = re.sub(r'([\.!,;?":]+)[ ]+([\.!,;?":]+)','\g<1>\g<2>', sentenceClean)
-        sentenceClean = re.sub(r'[ ]*([\.!,;?":]+)','\g<1> ', sentenceClean)
+    def __init__(self, vcost=0., hcost=0., dcost=0.,):
 
-        sentenceClean = re.sub(r' +',' ', sentenceClean)
-        sentenceClean = sentenceClean.strip()
-        return sentenceClean
-    
-    def __call__(self, words, sentences):
+        super(BaseTranscriptionAlignment, self).__init__()
+
+        self._dtw = DynamicTimeWarping(
+            vcost=vcost, hcost=hcost, dcost=dcost,
+            no_vertical=self.no_vertical, no_horizontal=self.no_horizontal)
+
+    def pairwise_distance(self, vsequence, hsequence):
+        """Compute pairwise distance matrix
+
+        Parameters
+        ----------
+        vsequence : (index, data) iterable
+        hsequence : (index, data) iterable
+
+        Returns
+        -------
+        distance : numpy array
+            Shape = len(vsequence) x len(hsequence)
+        """
+        raise NotImplementedError('')
+
+    def merge(self, vtranscription, htranscription, alignment):
+        """Merge transcriptions based on their alignment
+
+        Parameters
+        ----------
+        vtranscription, htranscription : Transcription
+        alignment : dict
+
+        Returns
+        -------
+        merged : Transcription
+
+        """
+
+        # pre-process alignment to prevent this kind of situations:
+        # `A` and `a` are merged into `a`
+        # `A` and `b` are merged into `b` -- but `A` no longer exists as it is
+        #                                    now called `a`!!!
+
+        # starts by creating a graph where an edge between two nodes
+        # indicate that the corresponding times will be eventually merged
+        # (we also keep track of the origin of the the nodes for later use)
+        same = nx.Graph()
+        for (v, h), status in alignment.iteritems():
+            if (status & STARTS_WITH == STARTS_WITH):
+                same.add_edge(('v', v[0]), ('h', h[0]))
+
+            if (status & ENDS_WITH == ENDS_WITH):
+                same.add_edge(('v', v[1]), ('h', h[1]))
+
+        # create a mapping
+        mapping = {}
+        for component in nx.connected_components(same):
+            anchored = [t for _, t in component if t.anchored]
+            if anchored:
+                to = anchored[0]
+            else:
+                vdrifting = [t for origin, t in component if origin == 'v']
+                to = vdrifting[0]
+
+            for t in component:
+                mapping[t] = to
+
+        # initialize new "union" transcription
+        merged = vtranscription.copy()
+        merged.add_edges_from(htranscription.edges(data=True))
+
+        # starts by merging nodes
+        for (origin, t), to in mapping.iteritems():
+            if t != to:
+                # according to Transcription.align documentation,
+                # if both t and to are drifting, the resulting graph
+                # will only contain `to` (from vertical sequence)
+                merged.align(t, to)
+
+        for (v, h), status in alignment.iteritems():
+
+            # connect start times in correct order
+            if status & STARTS_WITH != STARTS_WITH:
+
+                if status & STARTS_BEFORE == STARTS_BEFORE:
+                    merged.add_edge(mapping.get(('v', v[0]), v[0]),
+                                    mapping.get(('h', h[0]), h[0]))
+
+                if status & STARTS_AFTER == STARTS_AFTER:
+                    merged.add_edge(mapping.get(('h', h[0]), h[0]),
+                                    mapping.get(('v', v[0]), v[0]))
+
+            # connect end times in correct order
+            if status & ENDS_WITH != ENDS_WITH:
+
+                if status & ENDS_BEFORE == ENDS_BEFORE:
+                    merged.add_edge(mapping.get(('v', v[1]), v[1]),
+                                    mapping.get(('h', h[1]), h[1]))
+
+                if status & ENDS_AFTER == ENDS_AFTER:
+                    merged.add_edge(mapping.get(('h', h[1]), h[1]),
+                                    mapping.get(('v', v[1]), v[1]))
+
+        # remove self loops which might have resulted from various merging
+        for t in merged:
+            if merged.has_edge(t, t):
+                merged.remove_edge(t, t)
+
+        return merged
+
+    def _get_sequence(self, transcription, attribute=None):
+        """Get raw sequence of attribute values
+
+        Parameters
+        ----------
+        transcription : `Transcription`
+        attribute : str, optional
+            When `attribute` is not provided and there are only one attribute
+            on the first edge encountered, will automatically select this one
+            attribute from all other edges.
+
+        Returns
+        -------
+        sequence : list
+            Chronologically sorted list of ((start_t, end_t), value)
+            where `value` is the value of attribute `attribute` on the edge
+            between `start_t` and `end_t`.
+        """
+
+        sequence = []
+
+        for s, e, data in transcription.ordered_edges_iter(data=True):
+
+            # go to next edge if data is empty
+            if not data:
+                continue
+
+            # if attribute is not provided and data has only one attribute
+            # we choose to use this attribute and make sure the same
+            # attribute will be used for the rest of loop.
+            # if there is more than one, then raise an error
+            if attribute is None:
+                if len(data) > 1:
+                    msg = 'Which attribute should I use for alignment: {%s}?'
+                    raise ValueError(msg % ', '.join(data))
+                attribute, item = dict(data).popitem()
+                sequence.append(((s, e), item))
+
+            # if attribute is provided (or was chosen automatically above)
+            # and data contains it, append the item at the end of the sequence
+            elif attribute in data:
+                item = data[attribute]
+                sequence.append(((s, e), item))
+
+        return sequence
+
+    def __call__(self, vtranscription, htranscription,
+                 vattribute=None, hattribute=None):
+        """Align two transcriptions
+
+        Parameters
+        ----------
+        vtranscription, htranscription : `Transcription`
+        vattribute, hattribute : str
+
+        Returns
+        -------
+        merged : `Transcription`
+        """
+
+        # make sure transcriptions do not share any drifting labels
+        # and also keep track of `vertical` mapping so that we can
+        # retrieve original `vertical` drifting times at the end
+        T.reset()
+        vtranscription, vmapping = vtranscription.relabel_drifting_nodes()
+        htranscription, _ = htranscription.relabel_drifting_nodes()
+
+        # compute distance matrix
+        vsequence = self._get_sequence(vtranscription, attribute=vattribute)
+        hsequence = self._get_sequence(htranscription, attribute=hattribute)
+        distance = self.pairwise_distance(vsequence, hsequence)
+
+        # align and merge
+        vindex, _ = itertools.izip(*vsequence)
+        hindex, _ = itertools.izip(*hsequence)
+        alignment = self._dtw.get_alignment(vindex, hindex, distance=distance)
+        merged = self.merge(vtranscription, htranscription, alignment)
+
+        # retrieve original `vertical` drifting times
+        # in case they have not been anchored
+        relabeled, _ = merged.relabel_drifting_nodes(vmapping)
+
+        return relabeled
+
+
+class WordsToSentencesAlignment(AnyToOneMixin, BaseTranscriptionAlignment):
+
+    def pairwise_distance(self, iwords, isentences):
         """
 
         Parameters
         ----------
-        words : `pyannote.core.Transcription`
-        sentences : `pyannote.core.Transcription`
+        iwords : (index, word) iterable
+        isentences : (index ,sentence) iterable
 
         Returns
         -------
-        sentences : `pyannote.core.Transcription`
-
-
+        distance : (W, S)-shaped array
+            where W (resp. S) is the number of words (resp. sentences)
+            and distance[w, s] = 0 means sth sentence contains wth word.
         """
-        lastIndexNode=0
+        _, words = itertools.izip(*iwords)
+        _, sentences = itertools.izip(*isentences)
+        wordInSentence = np.zeros((len(words), len(sentences)), dtype=int)
+        for w, word in enumerate(words):
+            for s, sentence in enumerate(sentences):
+                wordInSentence[w, s] = word in sentence
+        return 1 - wordInSentence
 
-        end = False
-        
-        T.reset()
-        sentences, mapping = sentences.relabel_drifting_nodes()
-        words, _ = words.relabel_drifting_nodes()
-        sentences, mapping = sentences.relabel_drifting_nodes(mapping=mapping)
 
-        nodesWords = nx.topological_sort(words)
-        if nodesWords[lastIndexNode] == TStart:
-            lastIndexNode += 1
+class SentencesToWordsAlignment(OneToAnyMixin, WordsToSentencesAlignment):
 
-        last = -1
-        next = -1
+    def pairwise_distance(self, isentences, iwords):
+        D = super(SentencesToWordsAlignment, self).pairwise_distance(
+            iwords, isentences)
+        return D.T
 
-        first_node = None
 
-        first = -1
+class TFIDFAlignment(BaseTranscriptionAlignment):
+    """
 
-        for t1, t2, data in sentences.ordered_edges_iter(data=True):
-            
-            if 'speech' not in data:
-                continue
+    Parameters
+    ----------
+    tfidf : `pyannote.features.text.tfidf.TFIDF`
+    adapt : boolean, optional
+        Whether to adapt `tfidf` to the input sequences (including vocabulary
+        and inverse document frequency).
+        Default (False) assumes that `tfidf` was trained beforehand.
+    """
 
-            sentence = data['speech']
-            speaker = data['speaker']
-            sentenceClean = self._clean_sentence(sentence)
-            
-            if not self.punctuation:
-                sentenceClean = re.sub(r'[\.!,;?":]+','', sentenceClean)
+    def __init__(self, tfidf, adapt=False):
+        super(TFIDFAlignment, self).__init__()
+        self.tfidf = tfidf
+        self.adapt = adapt
 
-            if sentenceClean != "":
+    def pairwise_distance(self, vsequence, hsequence):
+        """Compute cosine distance in vector space
 
-                sentenceWords = ""
-            
-                if lastIndexNode < len(nodesWords):
+        Parameters
+        ----------
+        vsequence : (index, data) iterable
+        hsequence : (index, data) iterable
 
-                    if first_node is None and t1 != TStart:
-                        first_node = t1
-                        sentences.add_edge(first_node, nodesWords[lastIndexNode])
+        Returns
+        -------
+        distance : numpy array
+            Shape = len(vsequence) x len(hsequence)
+        """
 
-                    node_manual_trs_start = t1
-                    node_manual_trs_end = t2
+        _, vsentences = itertools.izip(*vsequence)
+        _, hsentences = itertools.izip(*hsequence)
 
-                    node_float = T()
-                    remainingData = None
-                    if last > 0 and next > 0:
-                        for key in words[last][next]:
-                            dataWord = words[last][next][key]
-                            if 'speech' in dataWord:
-                                remainingData = dataWord
-                                sentenceWords = remainingData['speech']
-                                sentenceWords = self._clean_sentence(sentenceWords)
-                                last = -1
-                                next = -1
-                    
-                    bAlreadyAdded = False
+        if self.adapt:
+            self.tfidf.fit(vsentences + hsentences)
 
-                    if(remainingData is not None):
-                        if 'speech' in remainingData:
-                            remainingData['speaker']=speaker
-                        sentences.add_edge(node_manual_trs_start, nodesWords[lastIndexNode], **remainingData)
-                        if sentenceWords == sentenceClean:
-                            sentences.add_edge(nodesWords[lastIndexNode], node_manual_trs_end)
-                            bAlreadyAdded = True
+        V = self.tfidf.transform(vsentences)
+        H = self.tfidf.transform(hsentences)
 
-                    if not bAlreadyAdded:
-                        if not sentences.has_edge(node_manual_trs_start, nodesWords[lastIndexNode]):
-                            sentences.add_edge(node_manual_trs_start, nodesWords[lastIndexNode])
+        return 1. - (V * H.T).toarray()
 
-                        node_end = ""
-                        previousNode = None
-                        while not end and lastIndexNode < len(nodesWords):
-                            node = nodesWords[lastIndexNode]
-                            for node2 in sorted(words.successors(node)):
-                                
-                                node_start = node
-                                node_end = node2
-                                
-                                if previousNode is not None:
-                                    if not sentences.has_edge(previousNode, node_start) and previousNode != node_start :
-                                        sentences.add_edge(previousNode, node_start)
-
-                                for key in words[node][node2]:
-                                    dataWord = words[node][node2][key]
-                                    if 'speech' in dataWord:
-                                        dataWord['speaker']=speaker
-                                    sentences.add_edge(node_start, node_end, **dataWord)
-                                
-                                    if 'speech' in dataWord:
-                                        if sentenceWords == "":
-                                            sentenceWords = dataWord['speech']
-                                        else:
-                                            sentenceWords += " " + dataWord['speech']
-                                        sentenceWords = self._clean_sentence(sentenceWords)
-                                if sentenceWords == sentenceClean:
-                                    if re.search(r'[\.!,;?":]$', sentenceClean):
-                                        #Have to add the next anchored just before the end of the speech turn ...
-                                        lastIndexNode+= 2
-                                        if lastIndexNode < len(nodesWords):
-                                            node = nodesWords[lastIndexNode]
-                                            if node.anchored:
-                                                sentences.add_edge(node_end, node)
-                                                node_end = node
-                                                lastIndexNode -= 1
-                                            else:
-                                                lastIndexNode -= 2
-                                    end = True
-                                previousNode = node_end
-                            lastIndexNode+=1
-
-                        if lastIndexNode+1 < len(nodesWords):
-                            last = nodesWords[lastIndexNode]
-                            next = nodesWords[lastIndexNode+1]
-
-                        #print "%s -> %s" % (node_end, node_manual_trs_end)
-                        lastIndexNode+=1
-
-                        sentences.add_edge(node_end, node_manual_trs_end)
-                        
-                        end = False
-
-                elif sentenceClean != "":
-                    print "Unable to align '%s' !" % (sentenceClean)
-                    return None
-
-        return sentences

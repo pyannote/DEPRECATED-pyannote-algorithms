@@ -32,120 +32,338 @@ from __future__ import unicode_literals
 
 import numpy as np
 
+# vertical item starts before/after horizontal item does
+STARTS_BEFORE = 1
+STARTS_AFTER = 2
+
+# items start simultaneously
+STARTS_WITH = STARTS_BEFORE | STARTS_AFTER
+
+# vertical item ends before/after horizontal item does
+ENDS_BEFORE = 4
+ENDS_AFTER = 8
+
+# items end simultaneously
+ENDS_WITH = ENDS_BEFORE | ENDS_AFTER
+
 
 class DynamicTimeWarping(object):
-    """
+    """Dynamic time warping
+
+    Implements standard dynamic time warping between two (vertical and
+    horizontal) sequences of length V and H respectively.
+
+            * ────────────────>   horizontal
+            │ *                    sequence
+            │   *
+            │     * * *
+            │           *
+            │             *
+            V               *
+
+         vertical
+         sequence
 
     Parameters
     ----------
-    vsequence, hsequence : iterable
-        (vertical and horizontal) sequences to be aligned.
-    vcost : float, optional
-        Cost for vertical paths (i, j) --> (i+1, j)
-    hcost : float, optional
-        Cost for horizontal paths (i, j) --> (i, j+1)
-    dcost : float, optional
-        Cost for diagonal paths (i, j) --> (i+1, j+1)
-    distance_func : func, optional
-        Function (vitem, hitem) --> distance between items
-    precomputed : np.array, optional
-        (H, W)-shaped array with pre-computed distances
 
+    distance_func : func, optional
+        Distance function taking two arguments `vitem` (any item from the
+        vertical sequence) and `hitem` (any item from the horizontal sequence)
+        and returning their distance as float.
+        `distance_func` must be provided in case pre-computed `distance` is not
+        available.
+
+    mask_func : func, optional
+        Mask function taking two required arguments (`v`, `h`) and two optional
+        arguments (`vitem`, `hitem`) and returning True when aligning them is
+        permitted and False otherwise. Defaults to all True.
+
+    vcost, hcost, dcost : float, optional
+        Extra cost added to each vertical, horizontal and diagonal move.
+        For instance, a positive `vcost` will encourage horizontal and diagonal
+        paths. All three values default to 0.
+
+    no_vertical, no_horizontal : boolean, optional
+        Constrain dynamic time warping to contain only non-vertical (resp.
+        non-horizontal) moves. Defaults to False (i.e. no constraint).
     """
 
-    def __init__(self, vsequence, hsequence,
-                 distance_func=None, precomputed=None,
-                 vcost=1., hcost=1., dcost=1.):
+    def __init__(self, distance_func=None, mask_func=None,
+                 vcost=0., hcost=0., dcost=0.,
+                 no_vertical=False, no_horizontal=False):
 
         super(DynamicTimeWarping, self).__init__()
 
-        # sequences to be aligned
-        self.vsequence = vsequence
-        self.hsequence = hsequence
-
-        # cost for elementary paths
+        # extra cost for each elementary move
         self.vcost = vcost  # vertical
         self.hcost = hcost  # horizontal
         self.dcost = dcost  # diagonal
 
+        # no vertical move
+        self.no_vertical = no_vertical
+        # no horizontal move
+        self.no_horizontal = no_horizontal
+
+        self.distance_func = distance_func
+        self.mask_func = mask_func
+
+    def _get_distance(self, v, h):
+        """Get distance between vth and hth items"""
+
+        # if distance is not computed already
+        # do it once and for all
+        if np.isnan(self._distance[v, h]):
+            vitem = self._vsequence[v]
+            hitem = self._hsequence[h]
+            self._distance[v, h] = self.distance_func(vitem, hitem)
+
+        return self._distance[v, h]
+
+    def _get_mask(self, v, h):
+        """Get mask at position (v, h)"""
+
+        # if mask is not computed already
+        # do it once and for all
+        if np.isnan(self._mask[v, h]):
+            vitem = self._vsequence[v]
+            hitem = self._hsequence[h]
+            self._mask[v, h] = self.mask_func(v, vitem, h, hitem)
+
+        return self._mask[v, h]
+
+    def _initialize(self, vsequence, hsequence, distance, mask):
+
+        self._vsequence = vsequence
+        self._hsequence = hsequence
+
+        V = len(self._vsequence)
+        H = len(self._hsequence)
+
+        # ~~~ distance matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
         # precomputed distance matrix
-        if precomputed is not None:
-            self._distance = precomputed
+        if distance is not None:
+            assert distance.shape == (V, H)
+            self._distance = distance
 
         # on-the-fly distance computation
-        elif distance_func is not None:
-            H, W = len(vsequence), len(hsequence)
-            self._distance = np.empty((H, W))
+        elif self.distance_func is not None:
+            self._distance = np.empty((V, H))
             self._distance[:] = np.NAN
-            self.distance_func = distance_func
 
         # any other case is not valid
         else:
             raise ValueError('')
 
-    def _get_distance(self, v, h):
+        # ~~~ mask ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        # if distance is not compute already
-        # do it once and for all
-        if np.isnan(self._distance[v, h]):
-            vitem = self.vsequence[v]
-            hitem = self.hsequence[h]
-            self._distance[v, h] = self.distance_func(vitem, hitem)
+        # precomputed mask
+        if mask is not None:
+            assert mask.shape == (V, H)
+            self._mask = mask
 
-        return self._distance[v, h]
+        # on-the-fly mask computation
+        elif self.mask_func is not None:
+            self._mask = np.empty((V, H))
+            self._mask[:] = np.NAN
 
-    def _get_cost(self):
+        # defaults to no mask
+        else:
+            self._mask = True * np.ones((V, H))
 
-        height = len(self.vsequence)
-        width = len(self.hsequence)
+    def _compute_cost(self):
+        """Compute cost matrix (taking mask into account)"""
 
-        cost = np.inf * np.ones((height, width))
+        V = len(self._vsequence)
+        H = len(self._hsequence)
+
+        # initialize with infinite cost
+        cost = np.inf * np.ones((V, H))
 
         # initialize first row and first column
         cost[0, 0] = self._get_distance(0, 0)
-        for v in range(1, height):
-            cost[v, 0] = cost[v - 1, 0] + self.vcost * self._get_distance(v, 0)
-        for h in range(1, width):
-            cost[0, h] = cost[0, h - 1] + self.hcost * self._get_distance(0, h)
 
-        for v in range(1, height):
-            for h in range(1, width):
-                d = self._get_distance(v, h)
-                dv = cost[v - 1, h] + self.vcost * d
-                dh = cost[v, h - 1] + self.hcost * d
-                dd = cost[v - 1, h - 1] + self.dcost * d
-                cost[v, h] = min(dv, dh, dd)
+        # update first row of cost matrix
+        for v in range(1, V):
+
+            # rest of the first row should remain infinite
+            # as soon as one element is masked
+            # or if vertical moves are not permitted
+            if self.no_vertical or not self._get_mask(v, 0):
+                break
+
+            # update cost based on the previous one on the same row
+            cost[v, 0] = self.vcost + cost[v - 1, 0] + self._get_distance(v, 0)
+
+        # update first column of cost matrix
+        for h in range(1, H):
+
+            # rest of the first column should remain infinite
+            # as soon as one element is masked
+            # or if horizontal moves are not permitted
+            if self.no_horizontal or not self._get_mask(0, h):
+                break
+
+            # update cost based on the previous one on the same column
+            cost[0, h] = self.hcost + cost[0, h - 1] + self._get_distance(0, h)
+
+        for v in range(1, V):
+            for h in range(1, H):
+
+                # no need to update cost if this element is masked
+                # (it will remain infinite)
+                if not self._get_mask(v, h):
+                    continue
+
+                D = []
+                dd = self.dcost + cost[v - 1, h - 1]
+                D.append(dd)
+
+                if not self.no_vertical:
+                    dv = self.vcost + cost[v - 1, h]
+                    D.append(dv)
+
+                if not self.no_horizontal:
+                    dh = self.hcost + cost[v, h - 1]
+                    D.append(dh)
+
+                cost[v, h] = self._get_distance(v, h) + min(D)
 
         return cost
 
-    def get_path(self):
-        """Get lowest cost path
+    def _backtrack(self, cost):
+
+        # initialize path at bottom/right
+        V, H = len(self._vsequence), len(self._hsequence)
+        v, h = V - 1, H - 1
+        path = [(v, h)]
+
+        # backtrack from bottom/right to top/left
+        while v > 0 or h > 0:
+
+            # build list of candidate predecessors
+            candidates = []
+            if v > 0 and h > 0:
+                candidates.append((v - 1, h - 1))
+            if v > 0 and not self.no_vertical:
+                candidates.append((v - 1, h))
+            if h > 0 and not self.no_horizontal:
+                candidates.append((v, h - 1))
+
+            # backtrack one step
+            v, h = min(candidates, key=lambda (i, j): cost[i, j])
+
+            path.append((v, h))
+
+        # reverse path so that it goes
+        # from top/left to bottom/right
+        return path[::-1]
+
+    def __call__(self, vsequence, hsequence, distance=None, mask=None):
+        """Get path with minimum cost from (0, 0) to (V-1, H-1)
+
+        Parameters
+        ----------
+
+        vsequence, hsequence : iterable
+            Vertical and horizontal sequences to align.
+
+        distance : (V, H)-shaped array, optional
+            Pre-computed pairwise distance matrix D where D[v, h] provides the
+            distance between the vth item of the vertical sequence and the hth
+            item of the horizontal one.
+
+        mask : (V, H)-shaped boolean array, optional
+            Pre-computed constraint mask M where M[v, h] is True when aligning
+            the vth item of the vertical sequence and the hth item of the
+            horizontal sequence is permitted, and False when it is not.
 
         Returns
         -------
         path : [(0, 0), ..., [(height-1, width-1)]
         """
 
-        # compute cost matrix
-        cost = self._get_cost()
+        self._initialize(vsequence, hsequence, distance, mask)
+        cost = self._compute_cost()
+        path = self._backtrack(cost)
+        return path
 
-        # initialize path at bottom/right
-        height, width = len(self.vsequence), len(self.hsequence)
-        v, h = height - 1, width - 1
-        path = [(v, h)]
+    def get_alignment(self, vsequence, hsequence, distance=None, mask=None):
+        """Get detailed alignment information
 
-        # backtrack from bottom/right to top/left
-        while v > 0 or h > 0:
+        Returns
+        -------
+        alignment : dict
+            Dictionary indexed by aligned (vitem, hitem) pairs.
+            Values are bitwise union (|) of the following flags indicating
+            if items start (or end) simultaneously or sequentially:
+            STARTS_AFTER, STARTS_BEFORE, ENDS_AFTER, ENDS_BEFORE
+            with STARTS_WITH = STARTS_BEFORE | STARTS_AFTER and
+            ENDS_WITH = ENDS_AFTER | ENDS_BEFORE and
+        """
 
-            # backtrack one step
-            v, h = min(
-                # go left, go up or both?
-                [(v - 1, h), (v, h - 1), (v - 1, h - 1)],
-                # use cost matrix to choose among allowed paths
-                key=lambda (i, j): np.inf if i < 0 or j < 0 else cost[i, j]
-            )
+        path = self.__call__(vsequence, hsequence, distance, mask)
 
-            path.append((v, h))
+        # dictionary indexed by vsequence items (resp. hsequence items)
+        # for each v-item, contains the list of integer index of align h-items
+        # and reciprocally
+        v2h, h2v = {}, {}
+        for _v, _h in path:
+            v = self._vsequence[_v]
+            r = self._hsequence[_h]
+            v2h[v] = v2h.get(v, []) + [_h]
+            h2v[r] = h2v.get(r, []) + [_v]
 
-        # reverse path so that it goes from top/left to bottom/right
-        return path[::-1]
+        # see docstring
+        alignment = {}
+
+        # vertical foward pass (i.e. in vsequence chronological order)
+        _h = None
+        for v in self._vsequence:
+
+            # find first h-item aligned with v
+            h = self._hsequence[min(v2h[v])]
+
+            # if it's a new one, v starts after h does
+            if h != _h:
+                alignment[v, h] = alignment.get((v, h), 0) | STARTS_AFTER
+                _h = h
+
+        # horizontal forward pass (i.e. in hsequence chronological order)
+        _v = None
+        for h in self._hsequence:
+
+            # find first v-item aligned with h
+            v = self._vsequence[min(h2v[h])]
+
+            # if it is a new one, v starts before h does
+            if v != _v:
+                alignment[v, h] = alignment.get((v, h), 0) | STARTS_BEFORE
+                _v = v
+
+        # vertical backward pass (i.e. in vsequence anti-chronological order)
+        _h = None
+        for v in reversed(self._vsequence):
+
+            # find last h-item aligned with v
+            h = self._hsequence[max(v2h[v])]
+
+            # if it is a new one, v ends before h does
+            if h != _h:
+                alignment[v, h] = alignment.get((v, h), 0) | ENDS_BEFORE
+                _h = h
+
+        # horizontal backward pass (i.e. in hsequence anti-chronological order)
+        _v = None
+        for h in reversed(self._hsequence):
+
+            # find last v-item aligned with h
+            v = self._vsequence[max(h2v[h])]
+
+            # if it is a new one, v ends after h does
+            if v != _v:
+                alignment[v, h] = alignment.get((v, h), 0) | ENDS_AFTER
+                _v = v
+
+        return alignment
