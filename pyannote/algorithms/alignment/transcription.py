@@ -61,7 +61,7 @@ class AnyToOneMixin:
         return True
 
 
-class TranscriptionAlignment(object):
+class BaseTranscriptionAlignment(object):
     """Transcriptions alignment algorithm
 
     This algorithm will temporally align two transcriptions
@@ -96,7 +96,7 @@ class TranscriptionAlignment(object):
 
     def __init__(self, vcost=0., hcost=0., dcost=0.,):
 
-        super(TranscriptionAlignment, self).__init__()
+        super(BaseTranscriptionAlignment, self).__init__()
 
         self._dtw = DynamicTimeWarping(
             vcost=vcost, hcost=hcost, dcost=dcost,
@@ -288,7 +288,7 @@ class TranscriptionAlignment(object):
         return relabeled
 
 
-class WordsToSentencesAlignment(AnyToOneMixin, TranscriptionAlignment):
+class WordsToSentencesAlignment(AnyToOneMixin, BaseTranscriptionAlignment):
 
     def pairwise_distance(self, iwords, isentences):
         """
@@ -321,7 +321,7 @@ class SentencesToWordsAlignment(OneToAnyMixin, WordsToSentencesAlignment):
         return D.T
 
 
-class TFIDFTranscriptionAlignment(TranscriptionAlignment):
+class TFIDFTranscriptionAlignment(BaseTranscriptionAlignment):
     """
 
     Parameters
