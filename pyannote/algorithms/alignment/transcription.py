@@ -36,8 +36,6 @@ from dtw import DynamicTimeWarping
 from dtw import STARTS_BEFORE, STARTS_WITH, STARTS_AFTER
 from dtw import ENDS_BEFORE, ENDS_WITH, ENDS_AFTER
 
-from pyannote.features.text.tfidf import TFIDF
-
 
 class OneToAnyMixin:
     """This mixin forbids vertical moves during DTW"""
@@ -62,7 +60,7 @@ class AnyToOneMixin:
 
 
 class BaseTranscriptionAlignment(object):
-    """Transcriptions alignment algorithm
+    """Base transcriptions alignment algorithm
 
     This algorithm will temporally align two transcriptions
     (called `vertical` and `horizontal` following standard DTW representation).
@@ -321,23 +319,25 @@ class SentencesToWordsAlignment(OneToAnyMixin, WordsToSentencesAlignment):
         return D.T
 
 
-class TFIDFTranscriptionAlignment(BaseTranscriptionAlignment):
+class TFIDFAlignment(BaseTranscriptionAlignment):
     """
 
     Parameters
     ----------
-
+    tfidf : `pyannote.features.text.tfidf.TFIDF`
+    adapt : boolean, optional
+        Whether to adapt `tfidf` to the input sequences (including vocabulary
+        and inverse document frequency).
+        Default (False) assumes that `tfidf` was trained beforehand.
     """
 
-    def __init__(self, tfidf=None):
-        super(TFIDFTranscriptionAlignment, self).__init__()
-
-        if tfidf is None:
-            tfidif = TFIDF(binary=True)
-        self._tfidf = tfidif
+    def __init__(self, tfidf, adapt=False):
+        super(TFIDFAlignment, self).__init__()
+        self.tfidf = tfidf
+        self.adapt = adapt
 
     def pairwise_distance(self, vsequence, hsequence):
-        """Compute pairwise distance matrix
+        """Compute cosine distance in vector space
 
         Parameters
         ----------
@@ -352,9 +352,12 @@ class TFIDFTranscriptionAlignment(BaseTranscriptionAlignment):
 
         _, vsentences = itertools.izip(*vsequence)
         _, hsentences = itertools.izip(*hsequence)
-        self._tfidf.fit(vsentences + hsentences)
-        V = self._tfidf.transform(vsentences)
-        H = self._tfidf.transform(hsentences)
-        return 1. - (V * H.T).toarray()
 
+        if self.adapt:
+            self.tfidf.fit(vsentences + hsentences)
+
+        V = self.tfidf.transform(vsentences)
+        H = self.tfidf.transform(hsentences)
+
+        return 1. - (V * H.T).toarray()
 
