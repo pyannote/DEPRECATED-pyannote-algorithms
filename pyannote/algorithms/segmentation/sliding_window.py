@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -59,7 +59,8 @@ class SlidingWindowsSegmentation(object):
         Set gap duration. Defaults to no gap (i.e. 0 second)
     """
 
-    def __init__(self, duration=1.0, step=0.1, gap=0.0, threshold=0., **kwargs):
+    def __init__(self, duration=1.0, step=0.1, gap=0.0,
+                 threshold=0., **kwargs):
         super(SlidingWindowsSegmentation, self).__init__()
         self.duration = duration
         self.step = step
@@ -98,7 +99,7 @@ class SlidingWindowsSegmentation(object):
                 start=left.end,
                 end=left.end + self.duration + self.gap
             )
-            middle = .5*(left.end + right.start)
+            middle = .5 * (left.end + right.start)
 
             yield middle, self.diff(left, right, feature)
 
@@ -165,5 +166,6 @@ class GaussianDivergenceMixin:
         return divergence
 
 
-class SegmentationGaussianDivergence(GaussianDivergenceMixin, SlidingWindowsSegmentation):
+class SegmentationGaussianDivergence(GaussianDivergenceMixin,
+                                     SlidingWindowsSegmentation):
     pass
