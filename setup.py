@@ -37,7 +37,8 @@ setup(
     namespace_packages=['pyannote'],
     packages=find_packages(),
     install_requires=[
-        'pyannote.core >= 0.0.2',
+        'pyannote.core >= 0.1',
+        'pyannote.features >= 0.0.2',
         'scikit-learn >=0.14',
         'munkres >= 1.0.6',
     ],
