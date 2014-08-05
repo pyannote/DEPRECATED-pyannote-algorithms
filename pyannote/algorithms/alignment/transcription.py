@@ -39,11 +39,43 @@ from dtw import ENDS_BEFORE, ENDS_WITH, ENDS_AFTER
 from pyannote.features.text.tfidf import TFIDF
 
 
+class OneToAnyMixin:
+    """This mixin forbids vertical moves during DTW"""
+    @property
+    def no_vertical(self):
+        return True
+
+    @property
+    def no_horizontal(self):
+        return False
+
+
+class AnyToOneMixin:
+    """This mixin forbids horizontal moves during DTW"""
+    @property
+    def no_vertical(self):
+        return False
+
+    @property
+    def no_horizontal(self):
+        return True
+
+
 class TranscriptionAlignment(object):
     """Transcriptions alignment algorithm
 
-    This algorithm will temporally align two transcriptions (called `vertical`
-    and `horizontal` following standard DTW representation).
+    This algorithm will temporally align two transcriptions
+    (called `vertical` and `horizontal` following standard DTW representation).
+
+            * ────────────────>   horizontal
+            │ *
+            │   *
+            │     * * *
+            │           *
+            │             *
+            V               *
+
+         vertical
 
     Whenever two drifting times are merged, it will keep the `vertical` one.
 
@@ -54,15 +86,21 @@ class TranscriptionAlignment(object):
 
     """
 
-    def __init__(self, vattribute, hattribute):
+    @property
+    def no_vertical(self):
+        return False
+
+    @property
+    def no_horizontal(self):
+        return False
+
+    def __init__(self, vcost=0., hcost=0., dcost=0.,):
 
         super(TranscriptionAlignment, self).__init__()
 
-        self.vattribute = vattribute
-        self.hattribute = hattribute
-
-    def dtw(self, vindex, hindex, distance):
-        return DynamicTimeWarping(vindex, hindex, distance=distance)
+        self._dtw = DynamicTimeWarping(
+            vcost=vcost, hcost=hcost, dcost=dcost,
+            no_vertical=self.no_vertical, no_horizontal=self.no_horizontal)
 
     def pairwise_distance(self, vsequence, hsequence):
         """Compute pairwise distance matrix
@@ -77,41 +115,7 @@ class TranscriptionAlignment(object):
         distance : numpy array
             Shape = len(vsequence) x len(hsequence)
         """
-
-        V, H = len(vsequence), len(hsequence)
-        return np.random.randn(V, H)
-
-    def find_best_alignment(self, vsequence, hsequence):
-        """Compute sequence alignment
-
-        Alignment values are chosen among possible "bitwise or" combinations of
-        the following flags:
-        - STARTS_BEFORE: `vindex` starts before `hindex` does,
-        - STARTS_AFTER: `hindex` starts before `vindex` does,
-        - ENDS_BEFORE: `vindex` ends before `hindex` does,
-        - ENDS_AFTER: `hindex` ends before `vindex` does,
-
-        Parameters
-        ----------
-        vsequence : (vindex, vdata) iterable
-        hsequence : (hindex, hdata) iterable
-
-        Returns
-        -------
-        alignment : dict
-            (vindex, hindex)-indexed dictionary describing sequence alignment.
-        """
-
-        distance = self.pairwise_distance(vsequence, hsequence)
-
-        vindex, _ = itertools.izip(*vsequence)
-        hindex, _ = itertools.izip(*hsequence)
-
-        dtw = self.dtw(vindex, hindex, distance=distance)
-
-        alignment = dtw.get_alignment()
-
-        return alignment
+        raise NotImplementedError('')
 
     def merge(self, vtranscription, htranscription, alignment):
         """Merge transcriptions based on their alignment
@@ -199,20 +203,60 @@ class TranscriptionAlignment(object):
 
         return merged
 
-    def _get_sequence(self, transcription, attribute):
+    def _get_sequence(self, transcription, attribute=None):
+        """Get raw sequence of attribute values
+
+        Parameters
+        ----------
+        transcription : `Transcription`
+        attribute : str, optional
+            When `attribute` is not provided and there are only one attribute
+            on the first edge encountered, will automatically select this one
+            attribute from all other edges.
+
+        Returns
+        -------
+        sequence : list
+            Chronologically sorted list of ((start_t, end_t), value)
+            where `value` is the value of attribute `attribute` on the edge
+            between `start_t` and `end_t`.
+        """
+
         sequence = []
+
         for s, e, data in transcription.ordered_edges_iter(data=True):
-            if attribute in data:
-                sequence.append(((s, e), data[attribute]))
+
+            # go to next edge if data is empty
+            if not data:
+                continue
+
+            # if attribute is not provided and data has only one attribute
+            # we choose to use this attribute and make sure the same
+            # attribute will be used for the rest of loop.
+            # if there is more than one, then raise an error
+            if attribute is None:
+                if len(data) > 1:
+                    msg = 'Which attribute should I use for alignment: {%s}?'
+                    raise ValueError(msg % ', '.join(data))
+                attribute, item = dict(data).popitem()
+                sequence.append(((s, e), item))
+
+            # if attribute is provided (or was chosen automatically above)
+            # and data contains it, append the item at the end of the sequence
+            elif attribute in data:
+                item = data[attribute]
+                sequence.append(((s, e), item))
+
         return sequence
 
-    def __call__(self, vtranscription, htranscription):
+    def __call__(self, vtranscription, htranscription,
+                 vattribute=None, hattribute=None):
         """Align two transcriptions
 
         Parameters
         ----------
-        vtranscription : `Transcription`
-        htranscription : `Transcription`
+        vtranscription, htranscription : `Transcription`
+        vattribute, hattribute : str
 
         Returns
         -------
@@ -226,27 +270,68 @@ class TranscriptionAlignment(object):
         vtranscription, vmapping = vtranscription.relabel_drifting_nodes()
         htranscription, _ = htranscription.relabel_drifting_nodes()
 
-        # [(start_time, stop_time), sentence] iterable
-        vsequence = self._get_sequence(vtranscription, self.vattribute)
-        hsequence = self._get_sequence(htranscription, self.hattribute)
+        # compute distance matrix
+        vsequence = self._get_sequence(vtranscription, attribute=vattribute)
+        hsequence = self._get_sequence(htranscription, attribute=hattribute)
+        distance = self.pairwise_distance(vsequence, hsequence)
 
-        #
-        alignment = self.find_best_alignment(vsequence, hsequence)
-
-        # merge transcriptions based on the optimal alignment
+        # align and merge
+        vindex, _ = itertools.izip(*vsequence)
+        hindex, _ = itertools.izip(*hsequence)
+        alignment = self._dtw.get_alignment(vindex, hindex, distance=distance)
         merged = self.merge(vtranscription, htranscription, alignment)
 
         # retrieve original `vertical` drifting times
+        # in case they have not been anchored
         relabeled, _ = merged.relabel_drifting_nodes(vmapping)
 
         return relabeled
 
 
-class TFIDFTranscriptionAlignment(TranscriptionAlignment):
+class WordsToSentencesAlignment(AnyToOneMixin, TranscriptionAlignment):
 
-    def __init__(self, vattribute, hattribute, tfidf=None):
-        super(TFIDFTranscriptionAlignment, self).__init__(vattribute,
-                                                          hattribute)
+    def pairwise_distance(self, iwords, isentences):
+        """
+
+        Parameters
+        ----------
+        iwords : (index, word) iterable
+        isentences : (index ,sentence) iterable
+
+        Returns
+        -------
+        distance : (W, S)-shaped array
+            where W (resp. S) is the number of words (resp. sentences)
+            and distance[w, s] = 0 means sth sentence contains wth word.
+        """
+        _, words = itertools.izip(*iwords)
+        _, sentences = itertools.izip(*isentences)
+        wordInSentence = np.zeros((len(words), len(sentences)), dtype=int)
+        for w, word in enumerate(words):
+            for s, sentence in enumerate(sentences):
+                wordInSentence[w, s] = word in sentence
+        return 1 - wordInSentence
+
+
+class SentencesToWordsAlignment(OneToAnyMixin, WordsToSentencesAlignment):
+
+    def pairwise_distance(self, isentences, iwords):
+        D = super(SentencesToWordsAlignment, self).pairwise_distance(
+            iwords, isentences)
+        return D.T
+
+
+class TFIDFTranscriptionAlignment(TranscriptionAlignment):
+    """
+
+    Parameters
+    ----------
+
+    """
+
+    def __init__(self, tfidf=None):
+        super(TFIDFTranscriptionAlignment, self).__init__()
+
         if tfidf is None:
             tfidif = TFIDF(binary=True)
         self._tfidf = tfidif
@@ -273,30 +358,3 @@ class TFIDFTranscriptionAlignment(TranscriptionAlignment):
         return 1. - (V * H.T).toarray()
 
 
-class WordsAlignment(TranscriptionAlignment):
-
-    def pairwise_distance(self, wsequence, ssequence):
-        """
-
-        Parameters
-        ----------
-        wsequence : (index, word) iterable
-        ssequence : (index ,sentence) iterable
-
-        Returns
-        -------
-        distance : (W, S)-shaped array
-            where W (resp. S) is the number of words (resp. sentences)
-            and distance[w, s] = 0 means sth sentence contains wth word.
-        """
-        _, words = itertools.izip(*wsequence)
-        _, sentences = itertools.izip(*ssequence)
-        wordInSentence = np.zeros((len(words), len(sentences)), dtype=int)
-        for w, word in enumerate(words):
-            for s, sentence in enumerate(sentences):
-                wordInSentence[w, s] = word in sentence
-        return 1 - wordInSentence
-
-    def dtw(self, windex, sindex, distance):
-        return DynamicTimeWarping(windex, sindex, distance=distance,
-                                  hallow=False)
