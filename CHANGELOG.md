@@ -1,3 +1,7 @@
+### Version 0.0.4 (2014-08-05)
+
+  - feat(alignment): add transcription alignment 
+
 ### Version 0.0.3 (2014-07-08)
 
   - fix(stats): fix estimation of scores range
