@@ -51,15 +51,19 @@ class SlidingWindowsSegmentation(object):
         Set step duration. Defaults to 100ms
     gap : float, optional
         Set gap duration. Defaults to no gap (i.e. 0 second)
+    min_duration : float, optional
+        Minimum duration of segments. Defaults to 0 (no minimum).
+
     """
 
     def __init__(self, duration=1.0, step=0.1, gap=0.0,
-                 threshold=0., **kwargs):
+                 threshold=0., min_duration=0., **kwargs):
         super(SlidingWindowsSegmentation, self).__init__()
         self.duration = duration
         self.step = step
         self.gap = gap
         self.threshold = threshold
+        self.min_duration = min_duration
 
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
@@ -106,7 +110,11 @@ class SlidingWindowsSegmentation(object):
         y = np.array(y)
 
         # find local maxima
-        maxima = scipy.signal.argrelmax(y)
+        order = 1
+        if self.min_duration > 0:
+            order = int(self.min_duration / self.step)
+        maxima = scipy.signal.argrelmax(y, order=order)
+
         x = x[maxima]
         y = y[maxima]
 
