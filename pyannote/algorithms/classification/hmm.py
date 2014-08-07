@@ -30,13 +30,7 @@ import itertools
 from ..stats.lbg import LBG
 from .viterbi import viterbi_decoding, constrained_viterbi_decoding
 from pyannote.core import Annotation
-
-
-def pairwise(iterable):
-    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return itertools.izip(a, b)
+from pyannote.core.util import pairwise
 
 
 class ViterbiHMM(object):
@@ -268,7 +262,6 @@ class ViterbiHMM(object):
             # Viterbi decoding
             sequence = viterbi_decoding(emission, self._transition,
                                         self._initial)
-
 
         # convert state sequence to annotation
         annotation = self._sequence_to_annotation(sequence, sliding_window)
