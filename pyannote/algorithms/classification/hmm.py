@@ -249,8 +249,8 @@ class ViterbiHMM(object):
             constraints = np.ones((len(self.targets)), dtype=int)
 
             for t, target in enumerate(self.targets):
-                if target in self.min_duration:
-                    duration = self.min_duration[target]
+                duration = self.min_duration.get(target, 0.)
+                if duration > 0.:
                     constraints[t] = sliding_window.durationToSamples(duration)
 
             # Constrained Viterbi decoding
