@@ -37,7 +37,6 @@ a unique `source` label translation or left unchanged.
 """
 
 from base import BaseTagger
-from pyannote.core.mapping import ManyToOneMapping
 from mapping import HungarianMapper, ArgMaxMapper
 
 

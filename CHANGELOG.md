@@ -1,3 +1,7 @@
+### Version 0.0.4.1 (2014-10-01)
+
+  - fix: remove no longer existing import
+
 ### Version 0.0.4 (2014-08-05)
 
   - feat(alignment): add transcription alignment 
