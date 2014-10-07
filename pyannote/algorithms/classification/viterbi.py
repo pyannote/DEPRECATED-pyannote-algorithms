@@ -119,9 +119,11 @@ def constrained_viterbi_decoding(emission, transition, initial, constraint):
     T, K = emission.shape  # number of observations x number of states
 
     # ~~ INITIALIZATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    V = np.empty((T, K))
-    P = np.empty((T, K), dtype=int)
-    C = np.empty((T, K), dtype=int)
+    V = np.zeros((T, K))
+    P = np.zeros((T, K), dtype=int)
+    C = np.zeros((T, K), dtype=int)
+
+    # C[t, j] is
 
     for i in range(K):
         V[0, i] = initial[i] + emission[0, i]
@@ -130,25 +132,54 @@ def constrained_viterbi_decoding(emission, transition, initial, constraint):
 
     # ~~ NESTED-LOOP VERSION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for t in range(1, T):
+
         for j in range(K):
 
             if C[t - 1, j] < constraint[j]:
-                V[t, j] = V[t - 1, j] + transition[j, j] + emission[t, j]
                 P[t, j] = j
-
+                V[t, j] = V[t - 1, j] + transition[j, j] + emission[t, j]
+                C[t, j] = C[t - 1, j] + 1
             else:
 
-                ok = [(i == j) | ((C[t - 1, i] >= constraint[i]) & (T - t >= constraint[j]))
+                # can the optimal path reach state j at current time t
+                # from state i at previous time t-1?
+
+                # this is permitted only if we stay in the same state (i == j)
+                # or if we stayed already long enough in previous
+                # (C[t-1, i] >= constraint[i])
+
+                ok = [(i == j) | ((C[t - 1, i] >= constraint[i]) &
+                                  (T - t >= constraint[j]))
                       for i in range(K)]
+
+                # among all possible incoming states i, which one is the
+                # more likely?
                 tmp = [V[t - 1, i] + transition[i, j] if ok[i] else -np.inf
                        for i in range(K)]
+                p = np.argmax(tmp)
 
-                V[t, j] = np.max(tmp) + emission[t, j]
-                P[t, j] = np.argmax(tmp)
+                # optimal path reaches state j at current time
+                # from state p at previous time t-1
+                P[t, j] = p
 
-            C[t, j] = 1 if j != P[t, j] else C[t - 1, j] + 1
+                # its overall likelihood is derived from the one
+                # leading to state p at previous time t-1
+                V[t, j] = V[t - 1, p] + transition[p, j] + emission[t, j]
+
+                # if optimal path reaching state j at current time t
+                # does not come from same state j at previous time t-1
+                # reinitialize the counter
+                if p != j:
+                    C[t, j] = 1
+
+                # if optimal path reaching state j at current time
+                # comes from same state j at previous time t-1
+                # we just need to increment the counter
+                else:
+                    C[t, j] = C[t - 1, j] + 1
 
     # ~~ BACK-TRACKING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
     X = np.empty((T,), dtype=int)
     X[-1] = np.argmax(V[-1, :])
     for t in range(1, T):
