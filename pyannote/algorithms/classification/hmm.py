@@ -44,9 +44,10 @@ class ViterbiHMM(object):
     targets : iterable, optional
         List of targets to be recognized.
 
-    min_duration : dict, optional
+    min_duration : dict or float, optional
         {target: duration} dictionary providing the minimum duration constraint
         for each label (in seconds). Defaults to no constraint.
+        If float, use the same duration for all labels.
 
     n_components : int, optional
         Number of mixture components in GMM. Defaults to 1.
@@ -83,15 +84,14 @@ class ViterbiHMM(object):
 
     """
 
-    def __init__(self, targets=None, min_duration=None,
+    def __init__(self, targets=None, min_duration=0.,
                  n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3, n_iter=10,
                  disturb=0.05, sampling=0):
         super(ViterbiHMM, self).__init__()
 
         self.targets = targets
-        self.min_duration = {} if min_duration is None else dict(min_duration)
-
+        self.min_duration = min_duration
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.random_state = random_state
@@ -248,6 +248,13 @@ class ViterbiHMM(object):
             # (min-duration = 1 sample)
             constraints = np.ones((len(self.targets)), dtype=int)
 
+            # if min_duration is a number (i.e. not a dict)
+            # we make sure to make it a dict with same duration for all targets
+            if not isinstance(self.min_duration, dict):
+                self.min_duration = {target: float(self.min_duration)
+                                     for target in self.targets}
+
+            # deduce minimum number of states from mininimum duration
             for t, target in enumerate(self.targets):
                 duration = self.min_duration.get(target, 0.)
                 if duration > 0.:
