@@ -28,7 +28,7 @@ from __future__ import unicode_literals
 import numpy as np
 
 
-def viterbi_decoding(emission, transition, initial):
+def viterbi_decoding(emission, transition, initial, force=None):
     """Viterbi decoding
 
     Parameters
@@ -39,6 +39,9 @@ def viterbi_decoding(emission, transition, initial):
         T[i, j] is the transition log-probabilities from state i to state j.
     initial : array of shape (n_states, )
         I[i] is the initial log-probabilities of state i.
+    force : array of shape (n_samples, )
+        F[t] = i forces sample t to be in state i.
+        Use F[t] = -1 for no constraint.
 
     Returns
     -------
@@ -47,37 +50,38 @@ def viterbi_decoding(emission, transition, initial):
     """
 
     T, K = emission.shape  # number of observations x number of states
+    states = np.arange(K)  # states 0 to K-1
 
     # ~~ INITIALIZATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    if force is None:
+        F = -np.ones((T, ), dtype=int)
+    else:
+        F = np.array(force, dtype=int).reshape((T, ))
+
     V = np.empty((T, K))  # V[t, k] is the probability of the most probable
                           # state sequence for the first t observations that
                           # has k as its final state.
+
     V[0, :] = emission[0, :] + initial
+
+    # artifically set V[0, k] to -inf if k != F[0]
+    if F[0] >= 0:
+        V[0, states != F[0]] = -np.inf
 
     P = np.empty((K, T), dtype=int)  # P[k, t] remembers which state was used
                                      # to get from time t-1 to time t at
                                      # state k
-    P[:, 0] = range(K)
+    P[:, 0] = states
 
-    # ~~ NESTED-LOOP VERSION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # for t in range(1, T):
-    #     for k in range(K):
-    #         tmp = V[t - 1, :] + transition[:, k]
-    #         P[k, t] = np.argmax(tmp)
-    #         V[t, k] = emission[t, k] + np.max(tmp)
-
-    # ~~ FASTER COLUMN-WISE VERSION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # for t in range(1, T):
-    #     tmp = V[t - 1, :] + transition.T
-    #     P[:, t] = np.argmax(tmp, axis=1)
-    #     V[t, :] = emission[t, :] + np.max(tmp, axis=1)
-
-    # ~~ FASTER-ER JOINT MAX/ARGMAX VERSION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    states = range(K)
+    # ~~ FORWARD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for t in range(1, T):
+
         tmp = V[t - 1, :] + transition.T
         P[:, t] = np.argmax(tmp, axis=1)
+
         V[t, :] = emission[t, :] + tmp[states, P[:, t]]
+        if F[t] >= 0:
+            V[t, states != F[t]] = -np.inf
 
     # ~~ BACK-TRACKING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     X = np.empty((T,), dtype=int)
