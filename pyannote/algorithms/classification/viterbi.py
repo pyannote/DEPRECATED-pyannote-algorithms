@@ -90,8 +90,8 @@ def viterbi_decoding(emission, transition,
         # artificially set V[0, k] to -inf if k != F[0]
         V[0, states != F[0]] = -np.inf
 
-    P = np.empty((K, T), dtype=int)  # P[k, t] remembers which state was used
-    P[:, 0] = states                 # to get from time t-1 to time t at
+    P = np.empty((T, K), dtype=int)  # P[t, k] remembers which state was used
+    P[0, :] = states                 # to get from time t-1 to time t at
                                      # state k
 
     C = np.empty((T, K), dtype=int)  # C[t, k] = n means that the optimal path
@@ -120,13 +120,13 @@ def viterbi_decoding(emission, transition,
         # transitioning from state k to state k' (at time t)
         tmp = V[t - 1, :] + _transition.T
 
-        P[:, t] = np.argmax(tmp, axis=1)
+        P[t, :] = np.argmax(tmp, axis=1)
 
         # update C[t, :]
         for k in states:
             # optimal path reaching state k at time t
             # actually came from state k at time t-1
-            if P[k, t] == k:
+            if P[t, k] == k:
                 C[t, k] = C[t - 1, k] + 1
 
             # optimal path reaching state k at time t
@@ -134,13 +134,13 @@ def viterbi_decoding(emission, transition,
             else:
                 C[t, k] = 1
 
-        V[t, :] = emission[t, :] + tmp[states, P[:, t]]
+        V[t, :] = emission[t, :] + tmp[states, P[t, :]]
 
     # ~~ BACK-TRACKING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     X = np.empty((T,), dtype=int)
     X[-1] = np.argmax(V[-1, :])
     for t in range(1, T):
-        X[-(t + 1)] = P[X[-t], -t]
+        X[-(t + 1)] = P[-t, X[-t]]
 
     return X
 
