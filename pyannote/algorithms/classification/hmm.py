@@ -28,7 +28,7 @@ from __future__ import unicode_literals
 import numpy as np
 import itertools
 from ..stats.lbg import LBG
-from .viterbi import viterbi_decoding, constrained_viterbi_decoding
+from .viterbi import viterbi_decoding
 from pyannote.core import Annotation
 from pyannote.core.util import pairwise
 
@@ -242,11 +242,12 @@ class ViterbiHMM(object):
                               for target in self.targets]).T
 
         # Minimum duration constraints
+        consecutive = None
         if self.min_duration:
 
             # initialize with no constraint
             # (min-duration = 1 sample)
-            constraints = np.ones((len(self.targets)), dtype=int)
+            consecutive = np.ones((len(self.targets)), dtype=int)
 
             # if min_duration is a number (i.e. not a dict)
             # we make sure to make it a dict with same duration for all targets
@@ -258,17 +259,12 @@ class ViterbiHMM(object):
             for t, target in enumerate(self.targets):
                 duration = self.min_duration.get(target, 0.)
                 if duration > 0.:
-                    constraints[t] = sliding_window.durationToSamples(duration)
+                    consecutive[t] = sliding_window.durationToSamples(duration)
 
-            # Constrained Viterbi decoding
-            sequence = constrained_viterbi_decoding(emission, self._transition,
-                                                    self._initial, constraints)
-
-        else:
-
-            # Viterbi decoding
-            sequence = viterbi_decoding(emission, self._transition,
-                                        self._initial)
+        # Viterbi decoding
+        sequence = viterbi_decoding(emission, self._transition,
+                                    initial=self._initial,
+                                    consecutive=consecutive)
 
         # convert state sequence to annotation
         annotation = self._sequence_to_annotation(sequence, sliding_window)
