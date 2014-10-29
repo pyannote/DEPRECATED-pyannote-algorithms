@@ -28,7 +28,8 @@ from __future__ import unicode_literals
 import numpy as np
 
 
-def viterbi_decoding(emission, transition, initial, force=None):
+def viterbi_decoding(emission, transition,
+                     initial=None, consecutive=None, force=None):
     """Viterbi decoding
 
     Parameters
@@ -37,9 +38,12 @@ def viterbi_decoding(emission, transition, initial, force=None):
         E[t, i] is the emission log-probabilities of sample t at state i.
     transition : array of shape (n_states, n_states)
         T[i, j] is the transition log-probabilities from state i to state j.
-    initial : array of shape (n_states, )
+    initial : optional, array of shape (n_states, )
         I[i] is the initial log-probabilities of state i.
-    force : array of shape (n_samples, )
+    consecutive : optional, int or int array of shape (n_states, )
+        C[i] is a the minimum-consecutive-states constraint for state i.
+        C[i] = 1 is equivalent to no constraint.
+    force : optional, array of shape (n_samples, )
         F[t] = i forces sample t to be in state i.
         Use F[t] = -1 for no constraint.
 
@@ -47,41 +51,90 @@ def viterbi_decoding(emission, transition, initial, force=None):
     -------
     states : array of shape (n_samples, )
         Most probable state sequence
+
+    References
+    ----------
+    Enrique Garcia-Cejaa and Ramon Brenaa. "Long-term Activities Segmentation
+    using Viterbi Algorithm with a k-minimum-consecutive-states Constraint".
+    5th International Conference on Ambient Systems, Networks and Technologies
+
     """
 
     T, K = emission.shape  # number of observations x number of states
     states = np.arange(K)  # states 0 to K-1
 
     # ~~ INITIALIZATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    if initial is None:
+        initial = np.log(np.ones((K, )) / K)
+
     if force is None:
         F = -np.ones((T, ), dtype=int)
     else:
         F = np.array(force, dtype=int).reshape((T, ))
 
-    V = np.empty((T, K))  # V[t, k] is the probability of the most probable
-                          # state sequence for the first t observations that
-                          # has k as its final state.
+    if consecutive is None:
+        D = np.ones((K, ), dtype=int)
+    elif isinstance(consecutive, int):
+        D = consecutive * np.ones((K, ), dtype=int)
+    else:
+        D = np.array(consecutive, dtype=int).reshape((K, ))
 
-    V[0, :] = emission[0, :] + initial
+    V = np.empty((T, K))                # V[t, k] is the probability of the
+    V[0, :] = emission[0, :] + initial  # most probable state sequence for the
+                                        # first t observations that has k as
+                                        # its final state.
 
-    # artifically set V[0, k] to -inf if k != F[0]
+    # in case time t=0 is forced in a specific state
     if F[0] >= 0:
+        # artificially set V[0, k] to -inf if k != F[0]
         V[0, states != F[0]] = -np.inf
 
     P = np.empty((K, T), dtype=int)  # P[k, t] remembers which state was used
-                                     # to get from time t-1 to time t at
+    P[:, 0] = states                 # to get from time t-1 to time t at
                                      # state k
-    P[:, 0] = states
+
+    C = np.empty((T, K), dtype=int)  # C[t, k] = n means that the optimal path
+    C[0, :] = 1                      # leading to state k at time t has already
+                                     # been in state k since time t-n
 
     # ~~ FORWARD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for t in range(1, T):
 
-        tmp = V[t - 1, :] + transition.T
+        _transition = np.array(transition)
+
+        if F[t] < 0:
+            # zero transition probability for paths
+            # that do not match `consecutive` constraint
+            for k in states:
+                if C[t - 1, k] < D[k]:
+                    _transition[k, states != k] = -np.inf
+
+        else:
+            # zero transition probability for paths
+            # that do not match `force` constraint
+            _transition[:, states != F[t]] = -np.inf
+
+        # tmp[k, k'] is the probability of the most probable path
+        # leading to state k at time t - 1, plus the probability of
+        # transitioning from state k to state k' (at time t)
+        tmp = V[t - 1, :] + _transition.T
+
         P[:, t] = np.argmax(tmp, axis=1)
 
+        # update C[t, :]
+        for k in states:
+            # optimal path reaching state k at time t
+            # actually came from state k at time t-1
+            if P[k, t] == k:
+                C[t, k] = C[t - 1, k] + 1
+
+            # optimal path reaching state k at time t
+            # actually came from state k' != k at time t-1
+            else:
+                C[t, k] = 1
+
         V[t, :] = emission[t, :] + tmp[states, P[:, t]]
-        if F[t] >= 0:
-            V[t, states != F[t]] = -np.inf
 
     # ~~ BACK-TRACKING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     X = np.empty((T,), dtype=int)
@@ -92,101 +145,3 @@ def viterbi_decoding(emission, transition, initial, force=None):
     return X
 
 
-def constrained_viterbi_decoding(emission, transition, initial, constraint):
-    """Constrained Viterbi decoding
-
-    Parameters
-    ----------
-    emission : array of shape (n_samples, n_states)
-        E[t, i] is the emission log-probabilities of sample t at state i.
-    transition : array of shape (n_states, n_states)
-        T[i, j] is the transition log-probabilities from state i to state j.
-    initial : array of shape (n_states, )
-        I[i] is the initial log-probabilities of state i.
-    constraint : array of shape (n_states, )
-        C[i] is a the minimum-consecutive-states constraint for state i.
-        C[i] = 1 is equivalent to no constraint.
-
-    Returns
-    -------
-    states : array of shape (n_samples, )
-        Most probable state sequence
-
-    Reference
-    ---------
-    Enrique Garcia-Cejaa and Ramon Brenaa. "Long-term Activities Segmentation
-    using Viterbi Algorithm with a k-minimum-consecutive-states Constraint".
-    5th International Conference on Ambient Systems, Networks and Technologies
-
-    """
-
-    T, K = emission.shape  # number of observations x number of states
-
-    # ~~ INITIALIZATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    V = np.zeros((T, K))
-    P = np.zeros((T, K), dtype=int)
-    C = np.zeros((T, K), dtype=int)
-
-    # C[t, j] is
-
-    for i in range(K):
-        V[0, i] = initial[i] + emission[0, i]
-        P[0, i] = 0
-        C[0, i] = 1
-
-    # ~~ NESTED-LOOP VERSION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    for t in range(1, T):
-
-        for j in range(K):
-
-            if C[t - 1, j] < constraint[j]:
-                P[t, j] = j
-                V[t, j] = V[t - 1, j] + transition[j, j] + emission[t, j]
-                C[t, j] = C[t - 1, j] + 1
-            else:
-
-                # can the optimal path reach state j at current time t
-                # from state i at previous time t-1?
-
-                # this is permitted only if we stay in the same state (i == j)
-                # or if we stayed already long enough in previous
-                # (C[t-1, i] >= constraint[i])
-
-                ok = [(i == j) | ((C[t - 1, i] >= constraint[i]) &
-                                  (T - t >= constraint[j]))
-                      for i in range(K)]
-
-                # among all possible incoming states i, which one is the
-                # more likely?
-                tmp = [V[t - 1, i] + transition[i, j] if ok[i] else -np.inf
-                       for i in range(K)]
-                p = np.argmax(tmp)
-
-                # optimal path reaches state j at current time
-                # from state p at previous time t-1
-                P[t, j] = p
-
-                # its overall likelihood is derived from the one
-                # leading to state p at previous time t-1
-                V[t, j] = V[t - 1, p] + transition[p, j] + emission[t, j]
-
-                # if optimal path reaching state j at current time t
-                # does not come from same state j at previous time t-1
-                # reinitialize the counter
-                if p != j:
-                    C[t, j] = 1
-
-                # if optimal path reaching state j at current time
-                # comes from same state j at previous time t-1
-                # we just need to increment the counter
-                else:
-                    C[t, j] = C[t - 1, j] + 1
-
-    # ~~ BACK-TRACKING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    X = np.empty((T,), dtype=int)
-    X[-1] = np.argmax(V[-1, :])
-    for t in range(1, T):
-        X[-(t + 1)] = P[-t, X[-t]]
-
-    return X
