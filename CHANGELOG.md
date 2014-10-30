@@ -1,3 +1,7 @@
+### Version 0.1 (2014-10-30)
+
+  - feat: HMM classification (with Viterbi decoding)
+
 ### Version 0.0.4.1 (2014-10-01)
 
   - fix: remove no longer existing import
