@@ -36,10 +36,13 @@ setup(
     # package
     namespace_packages=['pyannote'],
     packages=find_packages(),
+    scripts=[
+        'scripts/pyannote_hmm.py',
+    ],
     install_requires=[
-        'pyannote.core >= 0.1',
-        'pyannote.features >= 0.0.2',
-        'scikit-learn >=0.14',
+        'pyannote.core >= 0.2',
+        'pyannote.parser >= 0.2',
+        'scikit-learn >= 0.14',
         'munkres >= 1.0.6',
     ],
     # versioneer

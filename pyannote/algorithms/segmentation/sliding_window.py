@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2012-2014 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 from __future__ import unicode_literals
 
 import itertools
@@ -32,13 +35,7 @@ import scipy.signal
 from pyannote.core import Timeline
 from pyannote.core.segment import Segment, SlidingWindow
 from ..stats.gaussian import Gaussian
-
-
-def pairwise(iterable):
-    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
-    a, b = itertools.tee(iterable)
-    next(b, None)
-    return itertools.izip(a, b)
+from pyannote.core.util import pairwise
 
 
 class SlidingWindowsSegmentation(object):
@@ -57,15 +54,19 @@ class SlidingWindowsSegmentation(object):
         Set step duration. Defaults to 100ms
     gap : float, optional
         Set gap duration. Defaults to no gap (i.e. 0 second)
+    min_duration : float, optional
+        Minimum duration of segments. Defaults to 0 (no minimum).
+
     """
 
     def __init__(self, duration=1.0, step=0.1, gap=0.0,
-                 threshold=0., **kwargs):
+                 threshold=0., min_duration=0., **kwargs):
         super(SlidingWindowsSegmentation, self).__init__()
         self.duration = duration
         self.step = step
         self.gap = gap
         self.threshold = threshold
+        self.min_duration = min_duration
 
         for key, value in kwargs.iteritems():
             setattr(self, key, value)
@@ -112,7 +113,11 @@ class SlidingWindowsSegmentation(object):
         y = np.array(y)
 
         # find local maxima
-        maxima = scipy.signal.argrelmax(y)
+        order = 1
+        if self.min_duration > 0:
+            order = int(self.min_duration / self.step)
+        maxima = scipy.signal.argrelmax(y, order=order)
+
         x = x[maxima]
         y = y[maxima]
 
