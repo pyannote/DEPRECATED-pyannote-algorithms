@@ -30,8 +30,8 @@
 Hidden Markov Model with (constrained) Viterbi decoding
 
 Usage:
-  hmm train [options] <uris.lst> <references.mdtm> <features.pkl> <model.pkl>
-  hmm apply [options] <model.pkl> <features.pkl> <hypothesis.mdtm>
+  hmm train [-g <gaussian>] [-c <covariance>] [-d <duration>] <uris.lst> <references.mdtm> <features.pkl> <model.pkl>
+  hmm apply [-d <duration>] [-f <constraint.mdtm>] <model.pkl> <features.pkl> <hypothesis.mdtm>
   hmm -h | --help
   hmm --version
 
@@ -39,13 +39,14 @@ Options:
   -g <gaussian>            Number of gaussian components [default: 16].
   -c <covariance>          Covariance type (diag or full) [default: diag].
   -d <duration>            Minimum duration in seconds [default: 0.250].
+  -f <constraint.mdtm>     Constrain Viterbi decoding to follow this path.
   -h --help                Show this screen.
   --version                Show version.
 """
 
 from pyannote.algorithms.classification.hmm import ViterbiHMM
 from pyannote.parser.util import CoParser
-from pyannote.parser.mdtm import MDTMParser
+from pyannote.parser import MDTMParser
 from docopt import docopt
 import pickle
 
@@ -72,7 +73,8 @@ def do_train(
         pickle.dump(hmm, f)
 
 
-def do_apply(model_pkl, features_pkl, hypothesis_mdtm, min_duration=0.250):
+def do_apply(model_pkl, features_pkl, hypothesis_mdtm,
+             min_duration=0.250, constraint_mdtm=None):
 
     with open(model_pkl, 'rb') as f:
         hmm = pickle.load(f)
@@ -82,7 +84,11 @@ def do_apply(model_pkl, features_pkl, hypothesis_mdtm, min_duration=0.250):
     with open(features_pkl, 'rb') as f:
         features = pickle.load(f)
 
-    hypothesis = hmm.apply(features)
+    constraint = None
+    if constraint_mdtm:
+        constraint = MDTMParser().read(constraint_mdtm)()
+
+    hypothesis = hmm.apply(features, constraint=constraint)
 
     with open(hypothesis_mdtm, 'w') as f:
         MDTMParser().write(hypothesis, f=f)
@@ -113,8 +119,8 @@ if __name__ == '__main__':
         model_pkl = arguments['<model.pkl>']
         features_pkl = arguments['<features.pkl>']
         hypothesis_mdtm = arguments['<hypothesis.mdtm>']
-
         min_duration = float(arguments['-d'])
+        constraint_mdtm = arguments['-f']
 
         do_apply(model_pkl, features_pkl, hypothesis_mdtm,
-                 min_duration=min_duration)
+                 min_duration=min_duration, constraint_mdtm=constraint_mdtm)
