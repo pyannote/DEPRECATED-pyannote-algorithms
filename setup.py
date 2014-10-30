@@ -43,6 +43,7 @@ setup(
         'pyannote.core >= 0.2',
         'pyannote.parser >= 0.2',
         'scikit-learn >= 0.14',
+        'scipy >=0.11.0',
         'munkres >= 1.0.6',
     ],
     # versioneer
