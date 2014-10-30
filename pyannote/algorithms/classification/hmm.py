@@ -222,12 +222,13 @@ class ViterbiHMM(object):
 
         return annotation
 
-    def apply(self, features):
+    def apply(self, features, constraint=None):
         """Apply Viterbi decoding
 
         Parameters
         ----------
         features : SlidingWindowFeatures
+        constraint : optional, Annotation
 
         Returns
         -------
@@ -261,10 +262,26 @@ class ViterbiHMM(object):
                 if duration > 0.:
                     consecutive[t] = sliding_window.durationToSamples(duration)
 
+        # Constraints
+        force = None
+        if constraint:
+            n_samples = emission.shape[0]
+            force = -np.ones((n_samples, ), dtype=int)
+            target2state = {target: k for k, target in enumerate(self.targets)}
+            for segment, _, target in constraint.itertracks(label=True):
+
+                # get sample range from segment span
+                t0, dt = sliding_window.segmentToRange(segment)
+
+                # if `target` does not match one of existing targets
+                # simply do not take it into account (-1)
+                force[t0:t0 + dt] = target2state.get(target, -1)
+
         # Viterbi decoding
         sequence = viterbi_decoding(emission, self._transition,
                                     initial=self._initial,
-                                    consecutive=consecutive)
+                                    consecutive=consecutive,
+                                    force=force)
 
         # convert state sequence to annotation
         annotation = self._sequence_to_annotation(sequence, sliding_window)
