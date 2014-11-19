@@ -1,6 +1,37 @@
+#!/usr/bin/env python
+# encoding: utf-8
+
+# The MIT License (MIT)
+
+# Copyright (c) 2014 CNRS
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 import numpy as np
 import itertools
-from viterbi import viterbi_decoding
+from viterbi import viterbi_decoding, \
+    VITERBI_CONSTRAINT_NONE, \
+    VITERBI_CONSTRAINT_MANDATORY, \
+    VITERBI_CONSTRAINT_FORBIDDEN
 
 
 class TestViterbiDecoding:
@@ -47,23 +78,47 @@ class TestViterbiDecoding:
         lengths = np.diff(changeStatesAt)
         assert np.min(lengths) >= consecutive
 
-    def test_force(self):
+    def test_constraint_mandatory(self):
         for ratio in [0.01, 0.05, 0.1, 0.2, 0.5]:
-            yield self.check_force, ratio
+            yield self.check_constraint_mandatory, ratio
 
-    def check_force(self, ratio):
+    def check_constraint_mandatory(self, ratio):
 
         T, K = self.emission.shape
 
-        force = -np.ones((T, ), dtype=int)
+        constraint = VITERBI_CONSTRAINT_NONE * np.ones((T, K), dtype=int)
 
         N = int(ratio * T)
-        Ts = np.random.randint(T, size=N)
+        Ts = np.random.choice(T, size=N, replace=False)
         Ks = np.random.randint(K, size=N)
         for t, k in itertools.izip(Ts, Ks):
-            force[t] = k
+            constraint[t, k] = VITERBI_CONSTRAINT_MANDATORY
 
-        decoded = viterbi_decoding(self.emission, self.transition, force=force)
+        decoded = viterbi_decoding(self.emission, self.transition,
+                                   constraint=constraint)
 
-        for t in Ts:
-            assert decoded[t] == force[t]
+        for i in range(N):
+            assert decoded[Ts[i]] == Ks[i]
+
+    def test_constraint_forbidden(self):
+
+        for ratio in [0.01, 0.05, 0.1, 0.2, 0.5]:
+            yield self.check_constraint_forbidden, ratio
+
+    def check_constraint_forbidden(self, ratio):
+
+        T, K = self.emission.shape
+
+        constraint = VITERBI_CONSTRAINT_NONE * np.ones((T, K), dtype=int)
+
+        N = int(ratio * T)
+        Ts = np.random.choice(T, size=N, replace=False)
+        Ks = np.random.randint(K, size=N)
+        for t, k in itertools.izip(Ts, Ks):
+            constraint[t, k] = VITERBI_CONSTRAINT_FORBIDDEN
+
+        decoded = viterbi_decoding(self.emission, self.transition,
+                                   constraint=constraint)
+
+        for i in range(N):
+            assert decoded[Ts[i]] != Ks[i]
