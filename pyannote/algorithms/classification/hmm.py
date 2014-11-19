@@ -28,7 +28,7 @@ from __future__ import unicode_literals
 import numpy as np
 import itertools
 from ..stats.lbg import LBG
-from .viterbi import viterbi_decoding
+from .viterbi import viterbi_decoding, VITERBI_CONSTRAINT_NONE
 from pyannote.core import Annotation
 from pyannote.core.util import pairwise
 
@@ -228,19 +228,24 @@ class ViterbiHMM(object):
         Parameters
         ----------
         features : SlidingWindowFeatures
-        constraint : optional, Annotation
-
+        constraint : optional, Scores
+            0 : no constraint
+            1 : forbidden label
+            2 : mandatory label
         Returns
         -------
         result : Annotation
         """
 
         X = features.data
+
         sliding_window = features.sliding_window
 
         # compute emission probability
         emission = np.vstack([self._model[target].score(X)
                               for target in self.targets]).T
+
+        n_samples, n_states = emission.shape
 
         # Minimum duration constraints
         consecutive = None
@@ -262,28 +267,34 @@ class ViterbiHMM(object):
                 if duration > 0.:
                     consecutive[t] = sliding_window.durationToSamples(duration)
 
-        # Constraints
-        force = None
-        if constraint:
-            n_samples = emission.shape[0]
-            force = -np.ones((n_samples, ), dtype=int)
-            target2state = {target: k for k, target in enumerate(self.targets)}
-            for segment, _, target in constraint.itertracks(label=True):
+        # State constraints
+        constraint_ = VITERBI_CONSTRAINT_NONE * \
+            np.ones((n_samples, n_states), dtype=int)
+
+        target2state = {target: k for k, target in enumerate(self.targets)}
+
+        if constraint is not None:
+
+            # remove constraints that do not match one of existing targets
+            targets = set(constraint.labels()) & set(self.targets)
+            constraint = constraint.subset(targets)
+
+            for segment, _, target, value in constraint.itervalues():
+
+                state = target2state.get(target)
 
                 # get sample range from segment span
                 t0, dt = sliding_window.segmentToRange(segment)
 
-                # if `target` does not match one of existing targets
-                # simply do not take it into account (-1)
-                force[t0:t0 + dt] = target2state.get(target, -1)
+                constraint_[t0:t0 + dt, state] = value
 
         # Viterbi decoding
         sequence = viterbi_decoding(emission, self._transition,
                                     initial=self._initial,
                                     consecutive=consecutive,
-                                    force=force)
+                                    constraint=constraint_)
 
-        # convert state sequence to annotation
+        # convert state sequence back to annotation
         annotation = self._sequence_to_annotation(sequence, sliding_window)
 
         return annotation
