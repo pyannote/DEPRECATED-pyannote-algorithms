@@ -44,7 +44,7 @@ Options:
   --version                Show version.
 """
 
-from pyannote.algorithms.classification.hmm import ViterbiHMM
+from pyannote.algorithms.segmentation.hmm import ViterbiHMM
 from pyannote.parser.util import CoParser
 from pyannote.parser import MDTMParser
 from docopt import docopt

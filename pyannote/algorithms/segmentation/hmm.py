@@ -28,13 +28,13 @@ from __future__ import unicode_literals
 import numpy as np
 import itertools
 from ..stats.lbg import LBG
-from .viterbi import viterbi_decoding, VITERBI_CONSTRAINT_NONE
+from ..utils.viterbi import viterbi_decoding, VITERBI_CONSTRAINT_NONE
 from pyannote.core import Annotation
 from pyannote.core.util import pairwise
 
 
 class ViterbiHMM(object):
-    """HMM-based classification with Viterbi decoding
+    """HMM-based segmentation with Viterbi decoding
 
     Uses the LBG algorithm to train GMM for each state.
 
@@ -107,6 +107,7 @@ class ViterbiHMM(object):
                         min_covar=self.min_covar, n_iter=self.n_iter,
                         disturb=self.disturb, sampling=self.sampling)
 
+    #  in BaseClassification
     def _get_targets(self, annotation_iterator):
         """Get sorted list of targets from training data"""
 
@@ -116,6 +117,7 @@ class ViterbiHMM(object):
 
         return sorted(targets)
 
+    # in BaseClassification
     def _get_target_data(self, annotation_iterator, features_iterator, target):
         """Get training data for state `target`"""
 
@@ -126,6 +128,7 @@ class ViterbiHMM(object):
 
         return data
 
+    # specific to HMMClassification
     def _get_initial(self, annotation_iterator):
         """Get initial log-probabilities for all states"""
 
@@ -141,6 +144,7 @@ class ViterbiHMM(object):
 
         return np.log(initial / np.sum(initial))
 
+    # specific to HMMClassification
     def _get_transition(self, annotation_iterator, features_iterator):
         """Get transition log-probabilities"""
 
@@ -164,6 +168,7 @@ class ViterbiHMM(object):
                 prev_label = label
 
         return np.log(1. * transition.T / np.sum(transition, axis=1)).T
+
 
     def _fit_model(self, data):
         """Fit GMM to `data`"""
