@@ -25,211 +25,83 @@
 
 from __future__ import unicode_literals
 
-
 import numpy as np
-import logging
-from ..stats.lbg import LBG
 from ..stats.llr import logsumexp
-from base import BaseClassification
-import sklearn
-from pyannote.core.annotation import Unknown
+from pyannote.core import Scores
+
+from sklearn.mixture import GMM
+from sklearn.multiclass import OneVsRestClassifier
+from ..utils.sklearn_io import SKLearnIOMixin
 
 
-class GMMClassification(BaseClassification):
-    """GMM-based classification (one GMM per target)
+class _GMM(GMM):
 
-    targets : iterable, optional
-        When provided, targets contain the list of target to be recognized.
-        All other labels encountered during training are considered as unknown.
+    def fit(self, X, y):
+        return super(_GMM, self).fit(X[y == 1])
 
-    equal_priors : bool, optional
-        When False, use learned priors. Defaults to True (equal priors).
-
-    open_set : bool, optional
-        When True, perform open-set classification
-        Defaults to False (close-set classification).
-
-    == Gaussian Mixture Models ==
-
-    n_components : int, optional
-        Number of mixture components in GMM. Defaults to 1.
-
-    covariance_type : string, optional
-        String describing the type of covariance parameters to
-        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
-        Defaults to 'diag' (the only one supported for now...)
-
-    n_iter : int, optional
-        Number of EM iterations to perform during training.
-        Defaults to 10.
-
-    random_state: RandomState or an int seed (0 by default)
-        A random number generator instance
-
-    min_covar : float, optional
-        Floor on the diagonal of the covariance matrix to prevent
-        overfitting.  Defaults to 1e-3.
-
-    thresh : float, optional
-        Convergence threshold. Defaults to 1e-2.
-
-    sampling : int, optional
-        Reduce the number of samples used for the initialization steps to
-        `sampling` samples per component. A few hundreds samples per component
-        should be a reasonable rule of thumb.
-        The final estimation steps always use the whole sample set.
-
-    disturb : float, optional
-        Weight applied to variance when splitting Gaussians. Defaults to 0.05.
-        mu+ = mu + disturb * sqrt(var)
-        mu- = mu - disturb * sqrt(var)
-
-    balance : bool, optional
-        If True, try to balance target durations used for training of the UBM.
-        Defaults to False (i.e. use all available data).
-
-    n_jobs : int, optional
-        Number of parallel jobs for GMM adaptation
-        (default is one core). Use -1 for all cores.
+    def predict_proba(self, X):
+        prob = super(_GMM, self).score(X)
+        not_used = np.empty(prob.shape)
+        return np.vstack([not_used, prob]).T
 
 
-    """
+class _GMMUBM(_GMM):
 
-    def __init__(self, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3, n_iter=10,
-                 disturb=0.05, sampling=0, balance=False, targets=None,
-                 params='m', equal_priors=True, open_set=False, n_jobs=1):
+    def __init__(self, get_ubm=None, n_components=1, covariance_type='diag',
+                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 adapt_params='m', adapt_iter=100):
 
-        self.n_components = n_components
-        self.covariance_type = covariance_type
-        self.random_state = random_state
-        self.thresh = thresh
-        self.min_covar = min_covar
-        self.n_iter = n_iter
-        self.disturb = disturb
-        self.sampling = sampling
-        self.balance = balance
-        self.targets = targets
-        self.params = params
-        self.equal_priors = equal_priors
-        self.open_set = open_set
-        self.n_jobs = n_jobs
-        self.targets = targets
+        self.adapt_params = adapt_params
+        self.adapt_iter = adapt_iter
+        self.get_ubm = get_ubm
 
-        self._lbg = LBG(n_components=self.n_components,
-                        covariance_type=self.covariance_type,
-                        random_state=self.random_state, thresh=self.thresh,
-                        min_covar=self.min_covar, n_iter=self.n_iter,
-                        disturb=self.disturb, sampling=self.sampling)
+        super(_GMMUBM, self).__init__(
+            n_components=n_components,
+            covariance_type=covariance_type,
+            random_state=random_state,
+            thresh=thresh,
+            min_covar=min_covar,
+            n_iter=n_iter,
+            n_init=n_init,
+            params=params,
+            init_params=init_params)
 
-    def _fit_model(self, data):
-        gmm = self._lbg.apply(data)
-        return gmm
+    def fit(self, X, y):
 
-    def _apply_model(self, target_model, data):
-        target_scores = target_model.score(data)
-        return target_scores
+        ubm = self.get_ubm()
 
-    def predict(self, segmentation, features):
-        """Predict label of each track
+        self.weights_ = ubm.weights_
+        self.means_ = ubm.means_
+        self.covars_ = ubm.covars_
 
-        Parameters
-        ----------
-        segmentation : pyannote.Annotation
-            Pre-computed segmentation.
-        features : pyannote.SlidingWindowFeature
-            Pre-computed features.
+        self.n_init = 1
+        self.init_params = ''
 
-        Returns
-        -------
-        prediction : pyannote.Annotation
-            Copy of `segmentation` with predicted labels (or Unknown).
+        self.params = self.adapt_params
+        self.n_iter = self.adapt_iter
 
-        """
-
-        scores = self.scores(segmentation, features)
-        return scores.to_annotation()
+        return super(_GMMUBM, self).fit(X, y)
 
 
-class GMMUBMClassification(GMMClassification):
-    """GMM/UBM speaker identification
+class _GMMClassification(OneVsRestClassifier):
 
-    This is an implementation of the Universal Background Model adaptation
-    technique usually applied in the speaker identification community.
+    def fit(self, X, y):
 
-    targets : iterable, optional
-        When provided, targets contain the list of target to be recognized.
-        All other labels encountered during training are considered as unknown.
+        # TODO: raise an error if 2 classes
 
-    == Universal Background Model ==
+        return super(_GMMClassification, self).fit(X, y)
 
-    n_components : int, optional
-        Number of mixture components in UBM. Defaults to 1.
 
-    covariance_type : string, optional
-        String describing the type of covariance parameters to
-        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
-        Defaults to 'diag' (the only one supported for now...)
+class _GMMUBMClassification(OneVsRestClassifier):
 
-    n_iter : int, optional
-        Number of EM iterations to perform during training/adaptation.
-        Defaults to 10.
+    def _get_ubm(self):
+        return self.ubm_
 
-    random_state: RandomState or an int seed (0 by default)
-        A random number generator instance
-
-    min_covar : float, optional
-        Floor on the diagonal of the covariance matrix to prevent
-        overfitting.  Defaults to 1e-3.
-
-    thresh : float, optional
-        Convergence threshold. Defaults to 1e-2.
-
-    sampling : int, optional
-        Reduce the number of samples used for the initialization steps to
-        `sampling` samples per component. A few hundreds samples per component
-        should be a reasonable rule of thumb.
-        The final estimation steps always use the whole sample set.
-
-    disturb : float, optional
-        Weight applied to variance when splitting Gaussians. Defaults to 0.05.
-        mu+ = mu + disturb * sqrt(var)
-        mu- = mu - disturb * sqrt(var)
-
-    balance : bool, optional
-        If True, try to balance target durations used for training of the UBM.
-        Defaults to False (i.e. use all available data).
-
-    == Adaptation ==
-
-    params : string, optional
-        Controls which parameters are adapted.  Can contain any combination
-        of 'w' for weights, 'm' for means, and 'c' for covars.
-        Defaults to 'm'.
-
-    n_iter : int, optional
-        Number of EM iterations to perform during training/adaptation.
-        Defaults to 10.
-
-    n_jobs : int, optional
-        Number of parallel jobs for GMM adaptation
-        (default is one core). Use -1 for all cores.
-
-    == Scoring ==
-
-    equal_priors : bool, optional
-        When False, use learned priors. Defaults to True (equal priors).
-
-    open_set : bool, optional
-        When True, perform open-set classification
-        Defaults to False (close-set classification).
-
-    """
-
-    def __init__(self, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3, n_iter=10,
-                 disturb=0.05, sampling=0, balance=False, targets=None,
-                 params='m', equal_priors=True, open_set=False, n_jobs=1):
+    def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
+                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 adapt_iter=10, adapt_params='m'):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -237,141 +109,88 @@ class GMMUBMClassification(GMMClassification):
         self.thresh = thresh
         self.min_covar = min_covar
         self.n_iter = n_iter
-        self.disturb = disturb
-        self.sampling = sampling
-        self.balance = balance
-        self.targets = targets
+        self.n_init = n_init
         self.params = params
-        self.equal_priors = equal_priors
-        self.open_set = open_set
-        self.n_jobs = n_jobs
-        self.targets = targets
+        self.init_params = init_params
 
-        self._lbg = LBG(n_components=self.n_components,
-                        covariance_type=self.covariance_type,
-                        random_state=self.random_state, thresh=self.thresh,
-                        min_covar=self.min_covar, n_iter=self.n_iter,
-                        disturb=self.disturb, sampling=self.sampling)
+        self.adapt_iter = adapt_iter
+        self.adapt_params = adapt_params
 
-    def _fit_background(self, data):
-        ubm = self._lbg.apply(data)
-        return ubm
+        self.ubm_ = GMM(
+            n_components=self.n_components,
+            covariance_type=self.covariance_type,
+            random_state=self.random_state,
+            thresh=self.thresh,
+            min_covar=self.min_covar,
+            n_iter=self.n_iter,
+            n_init=self.n_init,
+            params=self.params,
+            init_params=self.init_params)
 
-    def _adapt_ubm(self, data):
-        """Adapt UBM to new data using the EM algorithm
+        estimator = _GMMUBM(
+            get_ubm=self._get_ubm,
+            n_components=n_components,
+            covariance_type=covariance_type,
+            random_state=random_state,
+            thresh=thresh,
+            min_covar=min_covar,
+            n_iter=n_iter,
+            n_init=n_init,
+            params=params,
+            init_params=init_params,
+            adapt_iter=adapt_iter,
+            adapt_params=adapt_params,
+        )
 
-        Parameters
-        ----------
-        data : array_like, shape (n, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+        super(_GMMUBMClassification, self).__init__(estimator, n_jobs=n_jobs)
 
-        Returns
-        -------
-        gmm : GMM
-            Adapted UBM
+    def fit(self, X, y):
 
-        """
-        if not hasattr(self, '_background'):
-            raise RuntimeError(
-                "Missing background model. Use 'prefit' first.")
+        # TODO: raise an error if 2 classes
 
-        # copy UBM structure and parameters
-        gmm = sklearn.clone(self._background)
-        gmm.params = self.params  # only adapt requested parameters
-        gmm.n_iter = self.n_iter
-        gmm.n_init = 1
-        gmm.init_params = ''      # initialize with UBM attributes
+        self.ubm_.fit(X)
 
-        # initialize with UBM attributes
-        gmm.weights_ = self._background.weights_
-        gmm.means_ = self._background.means_
-        gmm.covars_ = self._background.covars_
+        return super(_GMMUBMClassification, self).fit(X, y)
 
-        # --- logging ---------------------------------------------------------
-        _llr = np.mean(gmm.score(data))
-        logging.debug("llr before adaptation = %f" % _llr)
-        # ---------------------------------------------------------------------
+    def log_likelihood_ratio(self, X):
 
-        # adaptation
-        try:
-            gmm.fit(data)
-        except ValueError, e:
-            logging.error(e)
+        ll_ubm = self.ubm_.score(X)
+        ll = np.array([e.score(X) for e in self.estimators_]).T
+        ll_ratio = (ll.T - ll_ubm).T
+        return ll_ratio
 
-        # --- logging ---------------------------------------------------------
-        llr = np.mean(gmm.score(data))
-        logging.debug(
-            "llr after adaptation = %f, gain = %f" % (llr, llr - _llr))
-        # ---------------------------------------------------------------------
+    def predict_proba(self, X):
 
-        return gmm
+        ll_ratio = self.log_likelihood_ratio(X)
 
-    def _fit_model(self, data):
-        gmm = self._adapt_ubm(data)
-        return gmm
+        unknown_prior = 0.
+        n_classes = len(self.classes_)
+        priors = np.ones(n_classes) / n_classes
 
-    def _apply_background(self, data, targets_scores):
-        background_scores = self._background.score(data)
-        return (targets_scores.T - background_scores).T
-
-    def _llr2posterior(self, llr, priors, unknown_prior):
         denominator = (
             unknown_prior +
-            np.exp(logsumexp(llr, b=priors, axis=1))
+            np.exp(logsumexp(ll_ratio, b=priors, axis=1))
         )
-        posteriors = ((priors * np.exp(llr)).T / denominator).T
+
+        posteriors = ((priors * np.exp(ll_ratio)).T / denominator).T
+
         return posteriors
 
-    def predict_proba(self, segmentation, features):
-        """Compute posterior probabilities
+    def predict(self, X):
 
-        Parameters
-        ----------
-        segmentation : Annotation
-            Pre-computed segmentation.
-        features : pyannote.SlidingWindowFeature
-            Pre-computed features.
+        posteriors = self.predict_proba(X)
+        argmaxima = np.argmax(posteriors, axis=1)
+        return self.label_binarizer_.classes_[np.array(argmaxima.T)]
 
-        Returns
-        -------
-        probs : Scores
-            For each (segment, track) in `segmentation`, `scores` provides
-            the posterior probability for each class.
 
-        """
+class GMMUBMClassification(_GMMUBMClassification, SKLearnIOMixin):
 
-        # get raw log-likelihood ratio
-        scores = self.scores(segmentation, features)
+    def train(self, annotation_iter, features_iter):
 
-        # reduce Unknown prior to 0. in case of close-set classification
-        unknown_prior = self._prior.get(Unknown, 0.)
-        if self.open_set is False:
-            unknown_prior = 0.
+        X, y = self.Xy_stack(annotation_iter, features_iter)
+        self.fit(X, y)
 
-        # number of known targets
-        n_targets = len(self.targets)
-
-        if self.equal_priors:
-
-            # equally distribute known prior between known targets
-            priors = (1 - unknown_prior) * np.ones(n_targets) / n_targets
-
-        else:
-
-            # ordered known target priors
-            priors = np.array([self._prior[t] for t in self.targets])
-
-            # in case of close-set classification
-            # equally distribute unknown prior to known targets
-            if self.open_set is False:
-                priors = priors + self._prior.get(Unknown, 0.) / n_targets
-
-        # compute posterior from LLR directly on the internal numpy array
-        func = lambda llr: self._llr2posterior(llr, priors, unknown_prior)
-        return scores.apply(func)
-
-    def predict(self, segmentation, features):
+    def apply(self, features, segmentation):
         """Predict label of each track
 
         Parameters
@@ -388,14 +207,31 @@ class GMMUBMClassification(GMMClassification):
 
         """
 
-        probs = self.predict_proba(segmentation, features)
+        scores = self.scores(features, segmentation)
 
         if self.open_set:
             # open-set classification returns Unknown
             # when best target score is below unknown prior
-            return probs.to_annotation(posterior=True)
+            return scores.to_annotation(posterior=True)
 
         else:
             # close-set classification always returns
             # the target with the best score
-            return probs.to_annotation(posterior=False)
+            return scores.to_annotation(posterior=False)
+
+    def scores(self, features, segmentation):
+
+        X = self.X(features)
+
+        P = self.predict_proba(X)
+
+        sliding_window = features.sliding_window
+        scores = Scores(uri=segmentation.uri, modality=segmentation.modality)
+
+        for segment, track in segmentation.itertracks():
+
+            i0, n = sliding_window.segmentToRange(segment)
+            for i, label in self.label_binarizer_.classes_:
+                scores[segment, track, label] = np.mean(P[i0:i0 + n, i])
+
+        return scores
