@@ -97,8 +97,8 @@ class SlidingWindowsSegmentation(object):
         for left in sliding_window:
 
             right = Segment(
-                start=left.end,
-                end=left.end + self.duration + self.gap
+                start=left.end + self.gap,
+                end=left.end + self.gap + self.duration
             )
             middle = .5 * (left.end + right.start)
 
