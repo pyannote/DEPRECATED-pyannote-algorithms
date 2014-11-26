@@ -29,79 +29,22 @@ import numpy as np
 from ..stats.llr import logsumexp
 from pyannote.core import Scores
 
+import sklearn
 from sklearn.mixture import GMM
-from sklearn.multiclass import OneVsRestClassifier
-from ..utils.sklearn_io import SKLearnIOMixin
+from ..utils.sklearn import SKLearnMixin, LabelConverter
 
 
-class _GMM(GMM):
+def _fit_gmm(base_gmm, X):
 
-    def fit(self, X, y):
-        return super(_GMM, self).fit(X[y == 1])
-
-    def predict_proba(self, X):
-        prob = super(_GMM, self).score(X)
-        not_used = np.empty(prob.shape)
-        return np.vstack([not_used, prob]).T
+    gmm = sklearn.clone(base_gmm)
+    return gmm.fit(X)
 
 
-class _GMMUBM(_GMM):
-
-    def __init__(self, get_ubm=None, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 adapt_params='m', adapt_iter=100):
-
-        self.adapt_params = adapt_params
-        self.adapt_iter = adapt_iter
-        self.get_ubm = get_ubm
-
-        super(_GMMUBM, self).__init__(
-            n_components=n_components,
-            covariance_type=covariance_type,
-            random_state=random_state,
-            thresh=thresh,
-            min_covar=min_covar,
-            n_iter=n_iter,
-            n_init=n_init,
-            params=params,
-            init_params=init_params)
-
-    def fit(self, X, y):
-
-        ubm = self.get_ubm()
-
-        self.weights_ = ubm.weights_
-        self.means_ = ubm.means_
-        self.covars_ = ubm.covars_
-
-        self.n_init = 1
-        self.init_params = ''
-
-        self.params = self.adapt_params
-        self.n_iter = self.adapt_iter
-
-        return super(_GMMUBM, self).fit(X, y)
-
-
-class _GMMClassification(OneVsRestClassifier):
-
-    def fit(self, X, y):
-
-        # TODO: raise an error if 2 classes
-
-        return super(_GMMClassification, self).fit(X, y)
-
-
-class _GMMUBMClassification(OneVsRestClassifier):
-
-    def _get_ubm(self):
-        return self.ubm_
+class SKLearnGMMClassification(object):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 adapt_iter=10, adapt_params='m'):
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc'):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -113,8 +56,175 @@ class _GMMUBMClassification(OneVsRestClassifier):
         self.params = params
         self.init_params = init_params
 
+        self.n_jobs = n_jobs
+
+        super(SKLearnGMMClassification, self).__init__()
+
+    def fit(self, X, y):
+        """
+        Parameters
+        ----------
+        X :
+        y :
+        """
+
+        classes, counts = np.unique(y, return_counts=True)
+        priors = 1. * counts / np.sum(counts)
+
+        self.classes_ = classes
+        self.prior_ = priors
+
+        K = len(self.classes_)
+        assert np.all(self.classes_ == np.arange(K))
+
+        gmm = GMM(
+            n_components=self.n_components,
+            covariance_type=self.covariance_type,
+            random_state=self.random_state,
+            thresh=self.thresh,
+            min_covar=self.min_covar,
+            n_iter=self.n_iter,
+            n_init=self.n_init,
+            params=self.params,
+            init_params=self.init_params)
+
+        self.estimators_ = [_fit_gmm(gmm, X[y == i]) for i in self.classes_]
+
+        return self
+
+    def predict_proba(self, X):
+        ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
+        return ll
+
+    def predict(self, X):
+        ll = self.predict_proba(X)
+        y = np.argmax(ll, axis=1)
+        return y
+
+
+class GMMClassification(SKLearnMixin):
+
+    def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
+                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc'):
+
+        self.n_components = n_components
+        self.covariance_type = covariance_type
+        self.random_state = random_state
+        self.thresh = thresh
+        self.min_covar = min_covar
+        self.n_iter = n_iter
+        self.n_init = n_init
+        self.params = params
+        self.init_params = init_params
+
+        self.n_jobs = n_jobs
+
+    def fit(self, features_iter, annotation_iter):
+
+        self.classifier_ = SKLearnGMMClassification(
+            n_jobs=self.n_jobs,
+            n_components=self.n_components,
+            covariance_type=self.covariance_type,
+            random_state=self.random_state,
+            thresh=self.thresh,
+            min_covar=self.min_covar,
+            n_iter=self.n_iter,
+            n_init=self.n_init,
+            params=self.params,
+            init_params=self.init_params
+        )
+
+        annotation_iter = list(annotation_iter)
+        features_iter = list(features_iter)
+
+        X, y = self.Xy_stack(features_iter, annotation_iter, unknown='unique')
+
+        # convert PyAnnote labels to SKLearn labels
+        self.label_converter_ = LabelConverter()
+        converted_y = self.label_converter_.fit_transform(y)
+
+        # fit GMM-UBM classifier
+        self.classifier_.fit(X, converted_y)
+
+        return self
+
+    def predict_proba(self, features, segmentation):
+
+        # posterior probabilities sklearn-style
+        X = self.X(features, unknown='keep')
+        ll = self.classifier_.predict_proba(X)
+
+        # convert to pyannote-style & aggregate over each segment
+        scores = Scores(uri=segmentation.uri, modality=segmentation.modality)
+
+        sliding_window = features.sliding_window
+
+        for segment, track in segmentation.itertracks():
+
+            # extract ll for all features in segment and aggregate
+            i_start, i_duration = sliding_window.segmentToRange(segment)
+            p = np.mean(ll[i_start:i_start + i_duration, :], axis=1)
+            print p
+            print p.shape
+
+            for i, label in enumerate(self.label_converter_):
+                scores[segment, track, label] = p[i]
+
+        return scores
+
+    def predict(self, features, segmentation):
+
+        scores = self.predict_proba(features, segmentation)
+        return scores.to_annotation(posterior=False)
+
+
+def _adapt_ubm(ubm, X, adapt_params, adapt_iter):
+
+    # clone UBM (n_components, covariance type, etc...)
+    gmm = sklearn.clone(ubm)
+
+    # initialize with UBM precomputed weights, means and covariance matrices
+    gmm.n_init = 1
+    gmm.init_params = ''
+    gmm.weights_ = ubm.weights_
+    gmm.means_ = ubm.means_
+    gmm.covars_ = ubm.covars_
+
+    # adapt only some parameters
+    gmm.params = adapt_params
+    gmm.n_iter = adapt_iter
+    gmm.fit(X)
+
+    return gmm
+
+
+class SKLearnGMMUBMClassification(object):
+
+    def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
+                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
+
+        self.n_components = n_components
+        self.covariance_type = covariance_type
+        self.random_state = random_state
+        self.thresh = thresh
+        self.min_covar = min_covar
+        self.n_iter = n_iter
+        self.n_init = n_init
+        self.params = params
+        self.init_params = init_params
+
+        self.precomputed_ubm = precomputed_ubm  # pre-computed UBM
         self.adapt_iter = adapt_iter
         self.adapt_params = adapt_params
+
+        self.n_jobs = n_jobs
+
+        super(SKLearnGMMUBMClassification, self).__init__()
+
+    def fit_ubm(self, X, y=None):
 
         self.ubm_ = GMM(
             n_components=self.n_components,
@@ -127,111 +237,170 @@ class _GMMUBMClassification(OneVsRestClassifier):
             params=self.params,
             init_params=self.init_params)
 
-        estimator = _GMMUBM(
-            get_ubm=self._get_ubm,
-            n_components=n_components,
-            covariance_type=covariance_type,
-            random_state=random_state,
-            thresh=thresh,
-            min_covar=min_covar,
-            n_iter=n_iter,
-            n_init=n_init,
-            params=params,
-            init_params=init_params,
-            adapt_iter=adapt_iter,
-            adapt_params=adapt_params,
-        )
-
-        super(_GMMUBMClassification, self).__init__(estimator, n_jobs=n_jobs)
-
-    def fit(self, X, y):
-
-        # TODO: raise an error if 2 classes
-
         self.ubm_.fit(X)
 
-        return super(_GMMUBMClassification, self).fit(X, y)
+        return self.ubm_
 
-    def log_likelihood_ratio(self, X):
+    def fit(self, X, y):
+        """
+        Parameters
+        ----------
+        X :
+        y :
+        """
+
+        if self.precomputed_ubm is None:
+            self.ubm_ = self.fit_ubm(X, y=y)
+
+        else:
+            self.ubm_ = self.precomputed_ubm
+
+        classes, counts = np.unique(y, return_counts=True)
+        priors = 1. * counts / np.sum(counts)
+
+        self.open_set_ = (classes[0] == -1)
+        if self.open_set_:
+            self.classes_ = classes[1:]
+            self.prior_ = priors[1:]
+            self.unknown_prior_ = priors[0]
+
+        else:
+            self.classes_ = classes
+            self.prior_ = priors
+            self.unknown_prior_ = 0.
+
+        K = len(self.classes_)
+        assert np.all(self.classes_ == np.arange(K))
+
+        # TODO assert classes_ = [0, 1, 2, 3, ..., K-1]
+
+        self.estimators_ = [
+            _adapt_ubm(self.ubm_, X[y == i],
+                       self.adapt_params, self.adapt_iter)
+            for i in self.classes_
+        ]
+
+        return self
+
+    def _log_likelihood_ratio(self, X):
 
         ll_ubm = self.ubm_.score(X)
-        ll = np.array([e.score(X) for e in self.estimators_]).T
+        ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
         ll_ratio = (ll.T - ll_ubm).T
+
         return ll_ratio
 
     def predict_proba(self, X):
 
-        ll_ratio = self.log_likelihood_ratio(X)
-
-        unknown_prior = 0.
-        n_classes = len(self.classes_)
-        priors = np.ones(n_classes) / n_classes
+        ll_ratio = self._log_likelihood_ratio(X)
 
         denominator = (
-            unknown_prior +
-            np.exp(logsumexp(ll_ratio, b=priors, axis=1))
+            self.unknown_prior_ +
+            np.exp(logsumexp(ll_ratio, b=self.prior_, axis=1))
         )
 
-        posteriors = ((priors * np.exp(ll_ratio)).T / denominator).T
+        posterior = ((self.prior_ * np.exp(ll_ratio)).T / denominator).T
 
-        return posteriors
+        return posterior
 
     def predict(self, X):
 
-        posteriors = self.predict_proba(X)
-        argmaxima = np.argmax(posteriors, axis=1)
-        return self.label_binarizer_.classes_[np.array(argmaxima.T)]
+        n = X.shape[0]
+        y = -np.ones((X.shape[0],), dtype=float)
+
+        posterior = self.predict_proba(X)
+        unknown_posterior = 1. - np.sum(posterior, axis=1)
+
+        argmaxima = np.argmax(posterior, axis=1)
+
+        maxima = posterior[range(n), argmaxima]
+        known = maxima > unknown_posterior
+
+        y[known] = argmaxima[known]
+
+        return y
 
 
-class GMMUBMClassification(_GMMUBMClassification, SKLearnIOMixin):
+class GMMUBMClassification(SKLearnMixin):
 
-    def train(self, annotation_iter, features_iter):
+    def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
+                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
 
-        X, y = self.Xy_stack(annotation_iter, features_iter)
-        self.fit(X, y)
+        self.n_components = n_components
+        self.covariance_type = covariance_type
+        self.random_state = random_state
+        self.thresh = thresh
+        self.min_covar = min_covar
+        self.n_iter = n_iter
+        self.n_init = n_init
+        self.params = params
+        self.init_params = init_params
 
-    def apply(self, features, segmentation):
-        """Predict label of each track
+        self.precomputed_ubm = precomputed_ubm
+        self.adapt_iter = adapt_iter
+        self.adapt_params = adapt_params
 
-        Parameters
-        ----------
-        segmentation : pyannote.Annotation
-            Pre-computed segmentation.
-        features : pyannote.SlidingWindowFeature
-            Pre-computed features.
+        self.n_jobs = n_jobs
 
-        Returns
-        -------
-        prediction : pyannote.Annotation
-            Copy of `segmentation` with predicted labels (or Unknown).
+    def fit(self, features_iter, annotation_iter):
 
-        """
+        self.classifier_ = SKLearnGMMUBMClassification(
+            n_jobs=self.n_jobs,
+            n_components=self.n_components,
+            covariance_type=self.covariance_type,
+            random_state=self.random_state,
+            thresh=self.thresh,
+            min_covar=self.min_covar,
+            n_iter=self.n_iter,
+            n_init=self.n_init,
+            params=self.params,
+            init_params=self.init_params,
+            precomputed_ubm=self.precomputed_ubm,
+            adapt_iter=self.adapt_iter,
+            adapt_params=self.adapt_params
+        )
 
-        scores = self.scores(features, segmentation)
+        annotation_iter = list(annotation_iter)
+        features_iter = list(features_iter)
 
-        if self.open_set:
-            # open-set classification returns Unknown
-            # when best target score is below unknown prior
-            return scores.to_annotation(posterior=True)
+        X, y = self.Xy_stack(features_iter, annotation_iter, unknown='unique')
 
-        else:
-            # close-set classification always returns
-            # the target with the best score
-            return scores.to_annotation(posterior=False)
+        # convert PyAnnote labels to SKLearn labels
+        self.label_converter_ = LabelConverter()
+        converted_y = self.label_converter_.fit_transform(y)
 
-    def scores(self, features, segmentation):
+        # fit GMM-UBM classifier
+        self.classifier_.fit(X, converted_y)
 
-        X = self.X(features)
+        return self
 
-        P = self.predict_proba(X)
+    def predict_proba(self, features, segmentation):
+
+        # posterior probabilities sklearn-style
+        X = self.X(features, unknown='keep')
+        posterior = self.classifier_.predict_proba(X)
+
+        # convert to pyannote-style & aggregate over each segment
+        scores = Scores(uri=segmentation.uri, modality=segmentation.modality)
 
         sliding_window = features.sliding_window
-        scores = Scores(uri=segmentation.uri, modality=segmentation.modality)
 
         for segment, track in segmentation.itertracks():
 
-            i0, n = sliding_window.segmentToRange(segment)
-            for i, label in self.label_binarizer_.classes_:
-                scores[segment, track, label] = np.mean(P[i0:i0 + n, i])
+            # extract posterior for all features in segment and aggregate
+            i_start, i_duration = sliding_window.segmentToRange(segment)
+            p = np.mean(posterior[i_start:i_start + i_duration, :], axis=1)
+            print p
+            print p.shape
+
+            for i, label in enumerate(self.label_converter_):
+                scores[segment, track, label] = p[i]
 
         return scores
+
+    def predict(self, features, segmentation):
+
+        scores = self.predict_proba(features, segmentation)
+        return scores.to_annotation(posterior=True)
