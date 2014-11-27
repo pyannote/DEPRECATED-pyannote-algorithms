@@ -111,18 +111,25 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         return np.array([self.estimators_[i].score(X)
                          for i in self.classes_]).T
 
-    def predict_proba(self, X):
+    def predict_log_proba(self, X):
 
-        ll = self.scores(X)
+        ll_ratio = self.scores(X)
+        prior = self.prior_
 
-        denominator = (
-            self.unknown_prior_ +
-            np.exp(logsumexp(ll, b=self.prior_, axis=1))
-        )
+        if self.open_set_:
+            # TODO: append unknown prior
+            prior = self.prior_
+            # TODO: append "unknown" log-likelihood ratio (zeros)
+            ll_ratio = ll_ratio
 
-        posterior = ((self.prior_ * np.exp(ll)).T / denominator).T
+        posterior = ((np.log(prior) + ll_ratio).T -
+                     logsumexp(ll_ratio, b=prior, axis=1)).T
 
+        # TODO: remove dimension of unknown prior
         return posterior
+
+    def predict_proba(self, X):
+        return np.exp(self.predict_log_proba(X))
 
     def predict(self, X):
 
