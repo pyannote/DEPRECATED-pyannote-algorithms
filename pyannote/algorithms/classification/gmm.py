@@ -30,6 +30,7 @@ from ..stats.llr import logsumexp
 from pyannote.core import Scores
 
 import sklearn
+from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.mixture import GMM
 from ..utils.sklearn import SKLearnMixin, LabelConverter
 
@@ -40,7 +41,7 @@ def _fit_gmm(base_gmm, X):
     return gmm.fit(X)
 
 
-class SKLearnGMMClassification(object):
+class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
@@ -60,6 +61,25 @@ class SKLearnGMMClassification(object):
 
         super(SKLearnGMMClassification, self).__init__()
 
+    def _fit_priors(self, y):
+
+        classes, counts = np.unique(y, return_counts=True)
+        priors = 1. * counts / np.sum(counts)
+
+        self.open_set_ = (classes[0] == -1)
+        if self.open_set_:
+            self.classes_ = classes[1:]
+            self.prior_ = priors[1:]
+            self.unknown_prior_ = priors[0]
+
+        else:
+            self.classes_ = classes
+            self.prior_ = priors
+            self.unknown_prior_ = 0.
+
+        K = len(self.classes_)
+        assert np.all(self.classes_ == np.arange(K))
+
     def fit(self, X, y):
         """
         Parameters
@@ -68,14 +88,7 @@ class SKLearnGMMClassification(object):
         y :
         """
 
-        classes, counts = np.unique(y, return_counts=True)
-        priors = 1. * counts / np.sum(counts)
-
-        self.classes_ = classes
-        self.prior_ = priors
-
-        K = len(self.classes_)
-        assert np.all(self.classes_ == np.arange(K))
+        self._fit_priors(y)
 
         gmm = GMM(
             n_components=self.n_components,
@@ -92,13 +105,40 @@ class SKLearnGMMClassification(object):
 
         return self
 
+    def scores(self, X):
+        # should return log-likelihood ratio for each each class
+        # log p(X|i) - log p(X|~i) instead of just log p(X|i)
+        return np.array([self.estimators_[i].score(X)
+                         for i in self.classes_]).T
+
     def predict_proba(self, X):
-        ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
-        return ll
+
+        ll = self.scores(X)
+
+        denominator = (
+            self.unknown_prior_ +
+            np.exp(logsumexp(ll, b=self.prior_, axis=1))
+        )
+
+        posterior = ((self.prior_ * np.exp(ll)).T / denominator).T
+
+        return posterior
 
     def predict(self, X):
-        ll = self.predict_proba(X)
-        y = np.argmax(ll, axis=1)
+
+        n = X.shape[0]
+        y = -np.ones((X.shape[0],), dtype=float)
+
+        posterior = self.predict_proba(X)
+        unknown_posterior = 1. - np.sum(posterior, axis=1)
+
+        argmaxima = np.argmax(posterior, axis=1)
+
+        maxima = posterior[range(n), argmaxima]
+        known = maxima > unknown_posterior
+
+        y[known] = argmaxima[known]
+
         return y
 
 
@@ -199,30 +239,24 @@ def _adapt_ubm(ubm, X, adapt_params, adapt_iter):
     return gmm
 
 
-class SKLearnGMMUBMClassification(object):
+class SKLearnGMMUBMClassification(SKLearnGMMClassification):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
 
-        self.n_components = n_components
-        self.covariance_type = covariance_type
-        self.random_state = random_state
-        self.thresh = thresh
-        self.min_covar = min_covar
-        self.n_iter = n_iter
-        self.n_init = n_init
-        self.params = params
-        self.init_params = init_params
+        super(SKLearnGMMUBMClassification, self).__init__(
+            n_components=n_components, covariance_type=covariance_type,
+            random_state=random_state, thresh=thresh, min_covar=min_covar,
+            n_iter=n_iter, n_init=n_init, params=params,
+            init_params=init_params)
 
         self.precomputed_ubm = precomputed_ubm  # pre-computed UBM
         self.adapt_iter = adapt_iter
         self.adapt_params = adapt_params
 
         self.n_jobs = n_jobs
-
-        super(SKLearnGMMUBMClassification, self).__init__()
 
     def fit_ubm(self, X, y=None):
 
@@ -249,28 +283,14 @@ class SKLearnGMMUBMClassification(object):
         y :
         """
 
+        self._fit_priors(y)
+
         if self.precomputed_ubm is None:
             self.ubm_ = self.fit_ubm(X, y=y)
 
         else:
             self.ubm_ = self.precomputed_ubm
 
-        classes, counts = np.unique(y, return_counts=True)
-        priors = 1. * counts / np.sum(counts)
-
-        self.open_set_ = (classes[0] == -1)
-        if self.open_set_:
-            self.classes_ = classes[1:]
-            self.prior_ = priors[1:]
-            self.unknown_prior_ = priors[0]
-
-        else:
-            self.classes_ = classes
-            self.prior_ = priors
-            self.unknown_prior_ = 0.
-
-        K = len(self.classes_)
-        assert np.all(self.classes_ == np.arange(K))
 
         # TODO assert classes_ = [0, 1, 2, 3, ..., K-1]
 
@@ -282,43 +302,18 @@ class SKLearnGMMUBMClassification(object):
 
         return self
 
-    def _log_likelihood_ratio(self, X):
+    def scores(self, X):
+
+        # should return log-likelihood ratio for each each class
+        # log p(X|i) - log p(X|~i) instead of just log p(X|i)
+
+        # here it is approximated as log p(X|i) - log p(X|ω)
 
         ll_ubm = self.ubm_.score(X)
         ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
         ll_ratio = (ll.T - ll_ubm).T
 
         return ll_ratio
-
-    def predict_proba(self, X):
-
-        ll_ratio = self._log_likelihood_ratio(X)
-
-        denominator = (
-            self.unknown_prior_ +
-            np.exp(logsumexp(ll_ratio, b=self.prior_, axis=1))
-        )
-
-        posterior = ((self.prior_ * np.exp(ll_ratio)).T / denominator).T
-
-        return posterior
-
-    def predict(self, X):
-
-        n = X.shape[0]
-        y = -np.ones((X.shape[0],), dtype=float)
-
-        posterior = self.predict_proba(X)
-        unknown_posterior = 1. - np.sum(posterior, axis=1)
-
-        argmaxima = np.argmax(posterior, axis=1)
-
-        maxima = posterior[range(n), argmaxima]
-        known = maxima > unknown_posterior
-
-        y[known] = argmaxima[known]
-
-        return y
 
 
 class GMMUBMClassification(SKLearnMixin):
