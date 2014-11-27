@@ -205,7 +205,6 @@ class GMMSegmentation(SKLearnMixin):
         return annotation.translate(translation)
 
 
-
 class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
 
     def _n_classes(self,):
@@ -272,7 +271,7 @@ class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
 
         if self.open_set_:
             unknown_posterior = 1. - np.sum(posteriors, axis=1)
-            posteriors = np.vstack([posteriors, unknown_posterior])
+            posteriors = np.vstack([posteriors.T, unknown_posterior.T]).T
 
         sequence = viterbi_decoding(
             np.log(posteriors), self.transition_,
