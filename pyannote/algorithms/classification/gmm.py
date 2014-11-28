@@ -26,12 +26,11 @@
 from __future__ import unicode_literals
 
 import numpy as np
-from ..stats.llr import logsumexp
+from ..stats.llr import logsumexp, LLRNaiveBayes, LLRIsotonicRegression
 from pyannote.core import Scores
 
 import sklearn
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.naive_bayes import GaussianNB
 from sklearn.mixture import GMM
 from ..utils.sklearn import SKLearnMixin, LabelConverter
 
@@ -76,10 +75,10 @@ def adapt_ubm(ubm, X, adapt_params='m', adapt_iter=10):
     return gmm
 
 def fit_naive_bayes(X, y):
-    return GaussianNB().fit(X, y)
+    return LLRNaiveBayes().fit(X, y)
 
 def fit_isotonic_regression(X, y):
-    pass
+    return LLRIsotonicRegression().fit(X, y)
 
 
 class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
@@ -187,8 +186,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
             estimator = self.estimators_[i]
             transformer = self.transformers_[i]
             Xi = estimator.score(X).reshape((-1, 1))
-            pi = transformer.predict_log_proba(Xi)
-            ll_ratio[i] = np.diff(pi)
+            ll_ratio[i] = transformer.transform(Xi)
 
         return np.hstack([ll_ratio[i] for i in self.classes_])
 
