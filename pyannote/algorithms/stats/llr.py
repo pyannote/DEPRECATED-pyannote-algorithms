@@ -28,9 +28,17 @@ from __future__ import unicode_literals
 import numpy as np
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LinearRegression
+from sklearn.naive_bayes import GaussianNB
 
 
-class LLR(object):
+class LLRNaiveBayes(GaussianNB):
+
+    def transform(self, X):
+        log_proba = self.predict_log_proba(X)
+        return np.diff(log_proba)
+
+
+class BaseLLR(object):
 
     def _get_scores_ratios(self, X, Y, nbins=100):
 
@@ -103,7 +111,7 @@ class LLR(object):
         return 1 / (1 + priorRatio * np.exp(-llr))
 
 
-class LLRIsotonicRegression(LLR):
+class LLRIsotonicRegression(BaseLLR):
     """Log-likelihood ratio estimation by isotonic regression"""
 
     def __init__(self, equal_priors=False):
@@ -123,7 +131,10 @@ class LLRIsotonicRegression(LLR):
 
         return self
 
-    def toLogLikelihoodRatio(self, scores):
+    def toLogLikelihoodRatio(self, X):
+        return self.transform(X)
+
+    def transform(self, scores):
         """Get log-likelihood ratio given scores
 
         Parameters
@@ -150,7 +161,7 @@ class LLRIsotonicRegression(LLR):
         return calibrated
 
 
-class LLRLinearRegression(LLR):
+class LLRLinearRegression(BaseLLR):
     """Log-likelihood ratio estimation by linear regression"""
 
     def __init__(self, equal_priors=False):
@@ -168,7 +179,10 @@ class LLRLinearRegression(LLR):
 
         return self
 
-    def toLogLikelihoodRatio(self, scores):
+    def toLogLikelihoodRatio(self, X):
+        return self.transform(X)
+
+    def transform(self, scores):
         """Get log-likelihood ratio given scores
 
         Parameters
