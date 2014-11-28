@@ -31,6 +31,7 @@ from pyannote.core import Scores
 
 import sklearn
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.naive_bayes import GaussianNB
 from sklearn.mixture import GMM
 from ..utils.sklearn import SKLearnMixin, LabelConverter
 
@@ -80,15 +81,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         K = len(self.classes_)
         assert np.all(self.classes_ == np.arange(K))
 
-    def fit(self, X, y):
-        """
-        Parameters
-        ----------
-        X :
-        y :
-        """
-
-        self._fit_priors(y)
+    def _fit_estimators(self, X, y):
 
         gmm = GMM(
             n_components=self.n_components,
@@ -101,15 +94,41 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
             params=self.params,
             init_params=self.init_params)
 
-        self.estimators_ = [_fit_gmm(gmm, X[y == i]) for i in self.classes_]
+        self.estimators_ = {i: _fit_gmm(gmm, X[y == i]) for i in self.classes_}
+
+    def fit(self, X, y):
+        """
+        Parameters
+        ----------
+        X :
+        y :
+        """
+
+        self._fit_priors(y)
+        self._fit_estimators(X, y)
+
+        self.transformers_ = {}
+        for i, estimator in self.estimators_.iteritems():
+            Xi = estimator.score(X).reshape((-1, 1))
+            yi = np.array(y == i, dtype=int)
+            transformer = GaussianNB().fit(Xi, yi)
+            self.transformers_[i] = transformer
 
         return self
 
     def scores(self, X):
-        # should return log-likelihood ratio for each each class
-        # log p(X|i) - log p(X|~i) instead of just log p(X|i)
-        return np.array([self.estimators_[i].score(X)
-                         for i in self.classes_]).T
+        # return estimated log p(X|i) - log p(X|~i) for each each class i
+
+        ll_ratio = {}
+        for i in self.classes_:
+            estimator = self.estimators_[i]
+            transformer = self.transformers_[i]
+            Xi = estimator.score(X).reshape((-1, 1))
+            pi = transformer.predict_log_proba(Xi)
+            ll_ratio[i] = np.diff(pi)
+
+        return np.hstack([ll_ratio[i] for i in self.classes_])
+
 
     def predict_log_proba(self, X):
 
@@ -117,15 +136,19 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         prior = self.prior_
 
         if self.open_set_:
-            # TODO: append unknown prior
-            prior = self.prior_
-            # TODO: append "unknown" log-likelihood ratio (zeros)
-            ll_ratio = ll_ratio
+            # append "unknown" prior
+            prior = np.hstack([self.prior_, self.unknown_prior_])
+            # append "unknown" log-likelihood ratio (zeros)
+            zeros = np.zeros((ll_ratio.shape[0], 1))
+            ll_ratio = np.hstack([ll_ratio, zeros])
 
         posterior = ((np.log(prior) + ll_ratio).T -
                      logsumexp(ll_ratio, b=prior, axis=1)).T
 
-        # TODO: remove dimension of unknown prior
+        if self.open_set_:
+            # remove dimension of unknown prior
+            posterior = posterior[:, :-1]
+
         return posterior
 
     def predict_proba(self, X):
@@ -137,6 +160,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         y = -np.ones((X.shape[0],), dtype=float)
 
         posterior = self.predict_proba(X)
+
         unknown_posterior = 1. - np.sum(posterior, axis=1)
 
         argmaxima = np.argmax(posterior, axis=1)
@@ -282,15 +306,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
 
         return self.ubm_
 
-    def fit(self, X, y):
-        """
-        Parameters
-        ----------
-        X :
-        y :
-        """
-
-        self._fit_priors(y)
+    def _fit_estimators(self, X, y):
 
         if self.precomputed_ubm is None:
             self.ubm_ = self.fit_ubm(X, y=y)
@@ -298,16 +314,12 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
         else:
             self.ubm_ = self.precomputed_ubm
 
-
         # TODO assert classes_ = [0, 1, 2, 3, ..., K-1]
-
-        self.estimators_ = [
-            _adapt_ubm(self.ubm_, X[y == i],
-                       self.adapt_params, self.adapt_iter)
+        self.estimators_ = {
+            i: _adapt_ubm(self.ubm_, X[y == i],
+                          self.adapt_params, self.adapt_iter)
             for i in self.classes_
-        ]
-
-        return self
+        }
 
     def scores(self, X):
 
