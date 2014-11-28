@@ -35,13 +35,28 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.mixture import GMM
 from ..utils.sklearn import SKLearnMixin, LabelConverter
 
+from joblib import Parallel, delayed
 
-def _fit_gmm(base_gmm, X):
 
-    gmm = sklearn.clone(base_gmm)
+def fit_gmm(X, n_components=1, covariance_type='diag',
+            random_state=None, thresh=1e-2, min_covar=1e-3,
+            n_iter=100, n_init=1, params='wmc', init_params='wmc'):
+
+    gmm = GMM(
+        n_components=n_components,
+        covariance_type=covariance_type,
+        random_state=random_state,
+        thresh=thresh,
+        min_covar=min_covar,
+        n_iter=n_iter,
+        n_init=n_init,
+        params=params,
+        init_params=init_params)
+
     return gmm.fit(X)
 
-def _adapt_ubm(ubm, X, adapt_params, adapt_iter):
+
+def adapt_ubm(ubm, X, adapt_params='m', adapt_iter=10):
 
     # clone UBM (n_components, covariance type, etc...)
     gmm = sklearn.clone(ubm)
@@ -59,6 +74,12 @@ def _adapt_ubm(ubm, X, adapt_params, adapt_iter):
     gmm.fit(X)
 
     return gmm
+
+def fit_naive_bayes(X, y):
+    return GaussianNB().fit(X, y)
+
+def fit_isotonic_regression(X, y):
+    pass
 
 
 class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
@@ -102,7 +123,8 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def _fit_estimators(self, X, y):
 
-        gmm = GMM(
+        estimators = Parallel(n_jobs=self.n_jobs)(delayed(fit_gmm)(
+            X[y == k],
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
@@ -111,9 +133,37 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
             n_iter=self.n_iter,
             n_init=self.n_init,
             params=self.params,
-            init_params=self.init_params)
+            init_params=self.init_params) for k in self.classes_)
 
-        self.estimators_ = {i: _fit_gmm(gmm, X[y == i]) for i in self.classes_}
+        # estimators = [fit_gmm(
+        #     X[y == k],
+        #     n_components=self.n_components,
+        #     covariance_type=self.covariance_type,
+        #     random_state=self.random_state,
+        #     thresh=self.thresh,
+        #     min_covar=self.min_covar,
+        #     n_iter=self.n_iter,
+        #     n_init=self.n_init,
+        #     params=self.params,
+        #     init_params=self.init_params) for k in self.classes_]
+
+        self.estimators_ = {k: estimators[i]
+                            for i, k in enumerate(self.classes_)}
+
+
+    def _fit_transformers(self, X, y):
+
+        transformers = Parallel(n_jobs=self.n_jobs)(delayed(fit_naive_bayes)(
+            estimator.score(X).reshape((-1, 1)), y == k)
+            for k, estimator in self.estimators_.iteritems())
+
+        # transformers = [
+        #     fit_naive_bayes(estimator.score(X).reshape((-1, 1)), y == k)
+        #     for k, estimator in self.estimators_.iteritems()
+        # ]
+
+        self.transformers_ = {k: transformers[i]
+                              for i, k in enumerate(self.classes_)}
 
     def fit(self, X, y):
         """
@@ -125,13 +175,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
         self._fit_priors(y)
         self._fit_estimators(X, y)
-
-        self.transformers_ = {}
-        for i, estimator in self.estimators_.iteritems():
-            Xi = estimator.score(X).reshape((-1, 1))
-            yi = np.array(y == i, dtype=int)
-            transformer = GaussianNB().fit(Xi, yi)
-            self.transformers_[i] = transformer
+        self._fit_transformers(X, y)
 
         return self
 
@@ -211,7 +255,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
 
         self.n_jobs = n_jobs
 
-    def fit_ubm(self, X, y=None):
+    def _fit_ubm(self, X, y=None):
 
         self.ubm_ = GMM(
             n_components=self.n_components,
@@ -231,17 +275,24 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
     def _fit_estimators(self, X, y):
 
         if self.precomputed_ubm is None:
-            self.ubm_ = self.fit_ubm(X, y=y)
+            self.ubm_ = self._fit_ubm(X, y=y)
 
         else:
             self.ubm_ = self.precomputed_ubm
 
-        # TODO assert classes_ = [0, 1, 2, 3, ..., K-1]
-        self.estimators_ = {
-            i: _adapt_ubm(self.ubm_, X[y == i],
-                          self.adapt_params, self.adapt_iter)
-            for i in self.classes_
-        }
+        estimators = Parallel(n_jobs=self.n_jobs, verbose=5)(delayed(adapt_ubm)(
+            self.ubm_, X[y == k],
+            adapt_params=self.adapt_params,
+            adapt_iter=self.adapt_iter) for k in self.classes_)
+
+        # estimators = [adapt_ubm(
+        #     self.ubm_, X[y == k],
+        #     adapt_params=self.adapt_params, adapt_iter=self.adapt_iter)
+        #     for k in self.classes_]
+
+        self.estimators_ = {k: estimators[i]
+                            for i, k in enumerate(self.classes_)}
+
 
     def scores(self, X):
 
@@ -333,10 +384,6 @@ class GMMClassification(SKLearnMixin):
 
         scores = self.predict_proba(features, segmentation)
         return scores.to_annotation(posterior=False)
-
-
-
-
 
 
 class GMMUBMClassification(SKLearnMixin):
