@@ -41,6 +41,25 @@ def _fit_gmm(base_gmm, X):
     gmm = sklearn.clone(base_gmm)
     return gmm.fit(X)
 
+def _adapt_ubm(ubm, X, adapt_params, adapt_iter):
+
+    # clone UBM (n_components, covariance type, etc...)
+    gmm = sklearn.clone(ubm)
+
+    # initialize with UBM precomputed weights, means and covariance matrices
+    gmm.n_init = 1
+    gmm.init_params = ''
+    gmm.weights_ = ubm.weights_
+    gmm.means_ = ubm.means_
+    gmm.covars_ = ubm.covars_
+
+    # adapt only some parameters
+    gmm.params = adapt_params
+    gmm.n_iter = adapt_iter
+    gmm.fit(X)
+
+    return gmm
+
 
 class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
@@ -173,6 +192,72 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         return y
 
 
+class SKLearnGMMUBMClassification(SKLearnGMMClassification):
+
+    def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
+                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
+
+        super(SKLearnGMMUBMClassification, self).__init__(
+            n_components=n_components, covariance_type=covariance_type,
+            random_state=random_state, thresh=thresh, min_covar=min_covar,
+            n_iter=n_iter, n_init=n_init, params=params,
+            init_params=init_params)
+
+        self.precomputed_ubm = precomputed_ubm  # pre-computed UBM
+        self.adapt_iter = adapt_iter
+        self.adapt_params = adapt_params
+
+        self.n_jobs = n_jobs
+
+    def fit_ubm(self, X, y=None):
+
+        self.ubm_ = GMM(
+            n_components=self.n_components,
+            covariance_type=self.covariance_type,
+            random_state=self.random_state,
+            thresh=self.thresh,
+            min_covar=self.min_covar,
+            n_iter=self.n_iter,
+            n_init=self.n_init,
+            params=self.params,
+            init_params=self.init_params)
+
+        self.ubm_.fit(X)
+
+        return self.ubm_
+
+    def _fit_estimators(self, X, y):
+
+        if self.precomputed_ubm is None:
+            self.ubm_ = self.fit_ubm(X, y=y)
+
+        else:
+            self.ubm_ = self.precomputed_ubm
+
+        # TODO assert classes_ = [0, 1, 2, 3, ..., K-1]
+        self.estimators_ = {
+            i: _adapt_ubm(self.ubm_, X[y == i],
+                          self.adapt_params, self.adapt_iter)
+            for i in self.classes_
+        }
+
+    def scores(self, X):
+
+        # should return log-likelihood ratio for each each class
+        # log p(X|i) - log p(X|~i) instead of just log p(X|i)
+
+        # here it is approximated as log p(X|i) - log p(X|ω)
+
+        ll_ubm = self.ubm_.score(X)
+        ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
+        ll_ratio = (ll.T - ll_ubm).T
+
+        return ll_ratio
+
+
+
 class GMMClassification(SKLearnMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
@@ -250,89 +335,8 @@ class GMMClassification(SKLearnMixin):
         return scores.to_annotation(posterior=False)
 
 
-def _adapt_ubm(ubm, X, adapt_params, adapt_iter):
-
-    # clone UBM (n_components, covariance type, etc...)
-    gmm = sklearn.clone(ubm)
-
-    # initialize with UBM precomputed weights, means and covariance matrices
-    gmm.n_init = 1
-    gmm.init_params = ''
-    gmm.weights_ = ubm.weights_
-    gmm.means_ = ubm.means_
-    gmm.covars_ = ubm.covars_
-
-    # adapt only some parameters
-    gmm.params = adapt_params
-    gmm.n_iter = adapt_iter
-    gmm.fit(X)
-
-    return gmm
 
 
-class SKLearnGMMUBMClassification(SKLearnGMMClassification):
-
-    def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
-
-        super(SKLearnGMMUBMClassification, self).__init__(
-            n_components=n_components, covariance_type=covariance_type,
-            random_state=random_state, thresh=thresh, min_covar=min_covar,
-            n_iter=n_iter, n_init=n_init, params=params,
-            init_params=init_params)
-
-        self.precomputed_ubm = precomputed_ubm  # pre-computed UBM
-        self.adapt_iter = adapt_iter
-        self.adapt_params = adapt_params
-
-        self.n_jobs = n_jobs
-
-    def fit_ubm(self, X, y=None):
-
-        self.ubm_ = GMM(
-            n_components=self.n_components,
-            covariance_type=self.covariance_type,
-            random_state=self.random_state,
-            thresh=self.thresh,
-            min_covar=self.min_covar,
-            n_iter=self.n_iter,
-            n_init=self.n_init,
-            params=self.params,
-            init_params=self.init_params)
-
-        self.ubm_.fit(X)
-
-        return self.ubm_
-
-    def _fit_estimators(self, X, y):
-
-        if self.precomputed_ubm is None:
-            self.ubm_ = self.fit_ubm(X, y=y)
-
-        else:
-            self.ubm_ = self.precomputed_ubm
-
-        # TODO assert classes_ = [0, 1, 2, 3, ..., K-1]
-        self.estimators_ = {
-            i: _adapt_ubm(self.ubm_, X[y == i],
-                          self.adapt_params, self.adapt_iter)
-            for i in self.classes_
-        }
-
-    def scores(self, X):
-
-        # should return log-likelihood ratio for each each class
-        # log p(X|i) - log p(X|~i) instead of just log p(X|i)
-
-        # here it is approximated as log p(X|i) - log p(X|ω)
-
-        ll_ubm = self.ubm_.score(X)
-        ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
-        ll_ratio = (ll.T - ll_ubm).T
-
-        return ll_ratio
 
 
 class GMMUBMClassification(SKLearnMixin):
