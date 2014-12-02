@@ -26,7 +26,8 @@
 from __future__ import unicode_literals
 
 import numpy as np
-from ..stats.llr import logsumexp, LLRNaiveBayes, LLRIsotonicRegression
+from ..stats.llr import logsumexp
+from ..stats.llr import LLRNaiveBayes, LLRIsotonicRegression, LLRPassthrough
 from pyannote.core import Scores
 
 import sklearn
@@ -74,18 +75,27 @@ def adapt_ubm(ubm, X, adapt_params='m', adapt_iter=10):
 
     return gmm
 
+
 def fit_naive_bayes(X, y):
     return LLRNaiveBayes().fit(X, y)
 
+
 def fit_isotonic_regression(X, y):
     return LLRIsotonicRegression().fit(X, y)
+
+
+def fit_passthrough(X, y):
+    return LLRPassthrough().fit(X, y)
 
 
 class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc'):
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 calibration='naive_bayes'):
+
+        super(SKLearnGMMClassification, self).__init__()
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -99,7 +109,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
         self.n_jobs = n_jobs
 
-        super(SKLearnGMMClassification, self).__init__()
+        self.calibration = calibration
 
     def _fit_priors(self, y):
 
@@ -122,7 +132,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def _fit_estimators(self, X, y):
 
-        estimators = Parallel(n_jobs=self.n_jobs)(delayed(fit_gmm)(
+        self.estimators_ = Parallel(n_jobs=self.n_jobs)(delayed(fit_gmm)(
             X[y == k],
             n_components=self.n_components,
             covariance_type=self.covariance_type,
@@ -134,35 +144,33 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
             params=self.params,
             init_params=self.init_params) for k in self.classes_)
 
-        # estimators = [fit_gmm(
-        #     X[y == k],
-        #     n_components=self.n_components,
-        #     covariance_type=self.covariance_type,
-        #     random_state=self.random_state,
-        #     thresh=self.thresh,
-        #     min_covar=self.min_covar,
-        #     n_iter=self.n_iter,
-        #     n_init=self.n_init,
-        #     params=self.params,
-        #     init_params=self.init_params) for k in self.classes_]
+    def _get_fit_calibration(self):
 
-        self.estimators_ = {k: estimators[i]
-                            for i, k in enumerate(self.classes_)}
+        if self.calibration == 'naive_bayes':
+            return fit_naive_bayes
 
+        elif self.calibration == 'isotonic':
+            return fit_isotonic_regression
 
-    def _fit_transformers(self, X, y):
+        elif self.calibration == 'pass':
+            return fit_passthrough
 
-        transformers = Parallel(n_jobs=self.n_jobs)(delayed(fit_naive_bayes)(
-            estimator.score(X).reshape((-1, 1)), y == k)
-            for k, estimator in self.estimators_.iteritems())
+        else:
+            raise ValueError(
+                'choose calibration among naive_bayes, isotonic or pass')
 
-        # transformers = [
-        #     fit_naive_bayes(estimator.score(X).reshape((-1, 1)), y == k)
-        #     for k, estimator in self.estimators_.iteritems()
-        # ]
+    def _fit_calibrations(self, X, y):
 
-        self.transformers_ = {k: transformers[i]
-                              for i, k in enumerate(self.classes_)}
+        fit_calibration = self._get_fit_calibration()
+
+        raw_scores = self._raw_scores(X)
+
+        self.calibrations_ = Parallel(n_jobs=self.n_jobs)(
+            delayed(fit_calibration)(
+                raw_scores[:, i],
+                np.array(y == k, dtype=int)
+            )
+            for i, k in enumerate(self.classes_))
 
     def fit(self, X, y):
         """
@@ -174,22 +182,24 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
         self._fit_priors(y)
         self._fit_estimators(X, y)
-        self._fit_transformers(X, y)
+        self._fit_calibrations(X, y)
 
         return self
+
+    def _raw_scores(self, X):
+        return np.array([
+            estimator.score(X)
+            for estimator in self.estimators_
+        ]).T
 
     def scores(self, X):
         # return estimated log p(X|i) - log p(X|~i) for each each class i
 
-        ll_ratio = {}
-        for i in self.classes_:
-            estimator = self.estimators_[i]
-            transformer = self.transformers_[i]
-            Xi = estimator.score(X).reshape((-1, 1))
-            ll_ratio[i] = transformer.transform(Xi)
+        scores = self._raw_scores(X)
+        for i, calibration in enumerate(self.calibrations_):
+            scores[:, i] = calibration.transform(scores[:, i])
 
-        return np.hstack([ll_ratio[i] for i in self.classes_])
-
+        return scores
 
     def predict_log_proba(self, X):
 
@@ -239,19 +249,18 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
+                 precomputed_ubm=None, adapt_iter=10, adapt_params='m',
+                 calibration='isotonic'):
 
         super(SKLearnGMMUBMClassification, self).__init__(
             n_components=n_components, covariance_type=covariance_type,
             random_state=random_state, thresh=thresh, min_covar=min_covar,
             n_iter=n_iter, n_init=n_init, params=params,
-            init_params=init_params)
+            init_params=init_params, calibration=calibration, n_jobs=n_jobs)
 
-        self.precomputed_ubm = precomputed_ubm  # pre-computed UBM
+        self.precomputed_ubm = precomputed_ubm
         self.adapt_iter = adapt_iter
         self.adapt_params = adapt_params
-
-        self.n_jobs = n_jobs
 
     def _fit_ubm(self, X, y=None):
 
@@ -278,33 +287,19 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
         else:
             self.ubm_ = self.precomputed_ubm
 
-        estimators = Parallel(n_jobs=self.n_jobs, verbose=5)(delayed(adapt_ubm)(
+        self.estimators_ = Parallel(n_jobs=self.n_jobs)(delayed(adapt_ubm)(
             self.ubm_, X[y == k],
             adapt_params=self.adapt_params,
             adapt_iter=self.adapt_iter) for k in self.classes_)
 
-        # estimators = [adapt_ubm(
-        #     self.ubm_, X[y == k],
-        #     adapt_params=self.adapt_params, adapt_iter=self.adapt_iter)
-        #     for k in self.classes_]
-
-        self.estimators_ = {k: estimators[i]
-                            for i, k in enumerate(self.classes_)}
-
-
-    def scores(self, X):
-
+    def _raw_scores(self, X):
         # should return log-likelihood ratio for each each class
         # log p(X|i) - log p(X|~i) instead of just log p(X|i)
-
         # here it is approximated as log p(X|i) - log p(X|ω)
-
+        ll = np.array([estimator.score(X) for estimator in self.estimators_]).T
         ll_ubm = self.ubm_.score(X)
-        ll = np.array([self.estimators_[i].score(X) for i in self.classes_]).T
         ll_ratio = (ll.T - ll_ubm).T
-
         return ll_ratio
-
 
 
 class GMMClassification(SKLearnMixin):
