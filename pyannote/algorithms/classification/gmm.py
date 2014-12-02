@@ -93,7 +93,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 calibration='naive_bayes'):
+                 calibration=None):
 
         super(SKLearnGMMClassification, self).__init__()
 
@@ -146,18 +146,14 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def _get_fit_calibration(self):
 
+        if self.calibration is None:
+            return fit_passthrough
+
         if self.calibration == 'naive_bayes':
             return fit_naive_bayes
 
-        elif self.calibration == 'isotonic':
+        if self.calibration == 'isotonic':
             return fit_isotonic_regression
-
-        elif self.calibration == 'pass':
-            return fit_passthrough
-
-        else:
-            raise ValueError(
-                'choose calibration among naive_bayes, isotonic or pass')
 
     def _fit_calibrations(self, X, y):
 
@@ -250,7 +246,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
-                 calibration='isotonic'):
+                 calibration=None):
 
         super(SKLearnGMMUBMClassification, self).__init__(
             n_components=n_components, covariance_type=covariance_type,
@@ -307,7 +303,7 @@ class GMMClassification(SKLearnMixin):
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 calibration='isotonic'):
+                 calibration=None):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -387,7 +383,7 @@ class GMMUBMClassification(SKLearnMixin):
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
-                 calibration='isotonic'):
+                 calibration=None):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
