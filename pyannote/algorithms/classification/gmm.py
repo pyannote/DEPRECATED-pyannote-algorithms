@@ -306,7 +306,8 @@ class GMMClassification(SKLearnMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc'):
+                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 calibration='isotonic'):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -317,7 +318,7 @@ class GMMClassification(SKLearnMixin):
         self.n_init = n_init
         self.params = params
         self.init_params = init_params
-
+        self.calibration = calibration
         self.n_jobs = n_jobs
 
     def fit(self, features_iter, annotation_iter):
@@ -332,7 +333,8 @@ class GMMClassification(SKLearnMixin):
             n_iter=self.n_iter,
             n_init=self.n_init,
             params=self.params,
-            init_params=self.init_params
+            init_params=self.init_params,
+            calibration=self.calibration,
         )
 
         annotation_iter = list(annotation_iter)
@@ -384,7 +386,8 @@ class GMMUBMClassification(SKLearnMixin):
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 precomputed_ubm=None, adapt_iter=10, adapt_params='m'):
+                 precomputed_ubm=None, adapt_iter=10, adapt_params='m',
+                 calibration='isotonic'):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -401,6 +404,7 @@ class GMMUBMClassification(SKLearnMixin):
         self.adapt_params = adapt_params
 
         self.n_jobs = n_jobs
+        self.calibration = calibration
 
     def fit(self, features_iter, annotation_iter):
 
@@ -417,7 +421,8 @@ class GMMUBMClassification(SKLearnMixin):
             init_params=self.init_params,
             precomputed_ubm=self.precomputed_ubm,
             adapt_iter=self.adapt_iter,
-            adapt_params=self.adapt_params
+            adapt_params=self.adapt_params,
+            calibration=self.calibration
         )
 
         annotation_iter = list(annotation_iter)
