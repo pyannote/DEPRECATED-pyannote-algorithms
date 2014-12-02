@@ -27,6 +27,7 @@ from __future__ import unicode_literals
 
 import numpy as np
 from ..stats.llr import logsumexp
+from ..stats.lbg import LBG
 from ..stats.llr import LLRNaiveBayes, LLRIsotonicRegression, LLRPassthrough
 from pyannote.core import Scores
 
@@ -38,9 +39,22 @@ from ..utils.sklearn import SKLearnMixin, LabelConverter
 from joblib import Parallel, delayed
 
 
+def fit_gmm_lbg(X, n_components=1, covariance_type='diag',
+                random_state=None, thresh=1e-2, min_covar=1e-3,
+                n_iter=10, **kwargs):
+
+    lbg = LBG(n_components=n_components, covariance_type=covariance_type,
+              random_state=random_state, thresh=thresh, min_covar=min_covar,
+              n_iter=n_iter, disturb=0.05, sampling=500)
+
+    gmm = lbg.apply(X)
+
+    return gmm
+
+
 def fit_gmm(X, n_components=1, covariance_type='diag',
             random_state=None, thresh=1e-2, min_covar=1e-3,
-            n_iter=100, n_init=1, params='wmc', init_params='wmc'):
+            n_iter=10, n_init=1, params='wmc', init_params='wmc'):
 
     gmm = GMM(
         n_components=n_components,
@@ -92,8 +106,8 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 calibration=None):
+                 n_iter=10, n_init=1, params='wmc', init_params='wmc',
+                 calibration=None, lbg=False):
 
         super(SKLearnGMMClassification, self).__init__()
 
@@ -110,6 +124,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         self.n_jobs = n_jobs
 
         self.calibration = calibration
+        self.lbg = lbg
 
     def _fit_priors(self, y):
 
@@ -132,7 +147,12 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def _fit_estimators(self, X, y):
 
-        self.estimators_ = Parallel(n_jobs=self.n_jobs)(delayed(fit_gmm)(
+        if self.lbg:
+            fit_func = fit_gmm_lbg
+        else:
+            fit_func = fit_gmm
+
+        self.estimators_ = Parallel(n_jobs=self.n_jobs)(delayed(fit_func)(
             X[y == k],
             n_components=self.n_components,
             covariance_type=self.covariance_type,
@@ -244,19 +264,34 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
-                 calibration=None):
+                 calibration=None, lbg=False):
 
         super(SKLearnGMMUBMClassification, self).__init__(
             n_components=n_components, covariance_type=covariance_type,
             random_state=random_state, thresh=thresh, min_covar=min_covar,
             n_iter=n_iter, n_init=n_init, params=params,
-            init_params=init_params, calibration=calibration, n_jobs=n_jobs)
+            init_params=init_params, calibration=calibration, n_jobs=n_jobs,
+            lbg=lbg)
 
         self.precomputed_ubm = precomputed_ubm
         self.adapt_iter = adapt_iter
         self.adapt_params = adapt_params
+
+    def _fit_ubm_lbg(self, X, y=None):
+
+        self.ubm_ = fit_gmm_lbg(
+            X,
+            n_components=self.n_components,
+            covariance_type=self.covariance_type,
+            random_state=self.random_state,
+            thresh=self.thresh,
+            min_covar=self.min_covar,
+            n_iter=self.n_iter,
+            n_init=self.n_init)
+
+        return self.ubm_
 
     def _fit_ubm(self, X, y=None):
 
@@ -278,7 +313,10 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
     def _fit_estimators(self, X, y):
 
         if self.precomputed_ubm is None:
-            self.ubm_ = self._fit_ubm(X, y=y)
+            if self.lbg:
+                self.ubm_ = self._fit_ubm_lbg(X, y=y)
+            else:
+                self.ubm_ = self._fit_ubm(X, y=y)
 
         else:
             self.ubm_ = self.precomputed_ubm
@@ -302,8 +340,8 @@ class GMMClassification(SKLearnMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 calibration=None):
+                 n_iter=10, n_init=1, params='wmc', init_params='wmc',
+                 calibration=None, lbg=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -316,6 +354,7 @@ class GMMClassification(SKLearnMixin):
         self.init_params = init_params
         self.calibration = calibration
         self.n_jobs = n_jobs
+        self.lbg = lbg
 
     def fit(self, features_iter, annotation_iter):
 
@@ -331,6 +370,7 @@ class GMMClassification(SKLearnMixin):
             params=self.params,
             init_params=self.init_params,
             calibration=self.calibration,
+            lbg=self.lbg,
         )
 
         annotation_iter = list(annotation_iter)
@@ -362,9 +402,7 @@ class GMMClassification(SKLearnMixin):
 
             # extract ll for all features in segment and aggregate
             i_start, i_duration = sliding_window.segmentToRange(segment)
-            p = np.mean(ll[i_start:i_start + i_duration, :], axis=1)
-            print p
-            print p.shape
+            p = np.mean(ll[i_start:i_start + i_duration, :], axis=0)
 
             for i, label in enumerate(self.label_converter_):
                 scores[segment, track, label] = p[i]
@@ -381,9 +419,9 @@ class GMMUBMClassification(SKLearnMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
-                 calibration=None):
+                 calibration=None, lbg=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -401,6 +439,7 @@ class GMMUBMClassification(SKLearnMixin):
 
         self.n_jobs = n_jobs
         self.calibration = calibration
+        self.lbg = lbg
 
     def fit(self, features_iter, annotation_iter):
 
@@ -418,7 +457,8 @@ class GMMUBMClassification(SKLearnMixin):
             precomputed_ubm=self.precomputed_ubm,
             adapt_iter=self.adapt_iter,
             adapt_params=self.adapt_params,
-            calibration=self.calibration
+            calibration=self.calibration,
+            lbg=self.lbg
         )
 
         annotation_iter = list(annotation_iter)
@@ -450,9 +490,7 @@ class GMMUBMClassification(SKLearnMixin):
 
             # extract posterior for all features in segment and aggregate
             i_start, i_duration = sliding_window.segmentToRange(segment)
-            p = np.mean(posterior[i_start:i_start + i_duration, :], axis=1)
-            print p
-            print p.shape
+            p = np.mean(posterior[i_start:i_start + i_duration, :], axis=0)
 
             for i, label in enumerate(self.label_converter_):
                 scores[segment, track, label] = p[i]
