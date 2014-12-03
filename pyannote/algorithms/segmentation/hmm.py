@@ -35,6 +35,54 @@ from ..classification.gmm import \
 
 
 class SKLearnGMMSegmentation(SKLearnGMMClassification):
+    """
+
+    Parameters
+    ----------
+
+    n_components : int, optional
+        Number of mixture components. Defaults to 1.
+
+    covariance_type : string, optional
+        String describing the type of covariance parameters to
+        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
+        Defaults to 'diag'.
+
+    random_state: RandomState or an int seed (None by default)
+        A random number generator instance
+
+    min_covar : float, optional
+        Floor on the diagonal of the covariance matrix to prevent
+        overfitting.  Defaults to 1e-3.
+
+    thresh : float, optional
+        Convergence threshold.
+
+    n_iter : int, optional
+        Number of EM iterations to perform.
+
+    n_init : int, optional
+        Number of initializations to perform. the best results is kept
+
+    params : string, optional
+        Controls which parameters are updated in the training
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    init_params : string, optional
+        Controls which parameters are updated in the initialization
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    calibration : string, optional
+        Controls how raw GMM scores are calibrated into log-likelihood ratios.
+        Must be one of 'naive_bayes' (for Gaussian naive Bayes) or 'isotonic'
+        for isotonic regression. Defaults to no calibration.
+
+    lbg : boolean, optional
+        Controls whether to use the LBG algorithm for training.
+        Defaults to False.
+    """
 
     def _n_classes(self,):
         K = len(self.classes_)
@@ -97,6 +145,64 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
 
 
 class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
+    """
+    Parameters
+    ----------
+
+    n_components : int, optional
+        Number of mixture components. Defaults to 1.
+
+    covariance_type : string, optional
+        String describing the type of covariance parameters to
+        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
+        Defaults to 'diag'.
+
+    random_state: RandomState or an int seed (None by default)
+        A random number generator instance
+
+    min_covar : float, optional
+        Floor on the diagonal of the covariance matrix to prevent
+        overfitting.  Defaults to 1e-3.
+
+    thresh : float, optional
+        Convergence threshold.
+
+    n_iter : int, optional
+        Number of EM iterations to perform.
+
+    n_init : int, optional
+        Number of initializations to perform. the best results is kept
+
+    params : string, optional
+        Controls which parameters are updated in the training
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    init_params : string, optional
+        Controls which parameters are updated in the initialization
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    precomputed_ubm : GMM, optional
+        When provided, class GMMs are adapted from this UBM.
+
+    adapt_params : string, optional
+        Controls which parameters are updated in the adaptation
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'm'.
+
+    adapt_iter : int, optional
+        Number of EM iterations to perform during adaptation.
+
+    calibration : string, optional
+        Controls how raw GMM scores are calibrated into log-likelihood ratios.
+        Must be one of 'naive_bayes' (for Gaussian naive Bayes) or 'isotonic'
+        for isotonic regression. Defaults to no calibration.
+
+    lbg : boolean, optional
+        Controls whether to use the LBG algorithm for training.
+        Defaults to False.
+    """
 
     def _n_classes(self,):
 
@@ -176,6 +282,54 @@ class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
 
 
 class GMMSegmentation(SKLearnMixin):
+    """
+
+    Parameters
+    ----------
+
+    n_components : int, optional
+        Number of mixture components. Defaults to 1.
+
+    covariance_type : string, optional
+        String describing the type of covariance parameters to
+        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
+        Defaults to 'diag'.
+
+    random_state: RandomState or an int seed (None by default)
+        A random number generator instance
+
+    min_covar : float, optional
+        Floor on the diagonal of the covariance matrix to prevent
+        overfitting.  Defaults to 1e-3.
+
+    thresh : float, optional
+        Convergence threshold.
+
+    n_iter : int, optional
+        Number of EM iterations to perform.
+
+    n_init : int, optional
+        Number of initializations to perform. the best results is kept
+
+    params : string, optional
+        Controls which parameters are updated in the training
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    init_params : string, optional
+        Controls which parameters are updated in the initialization
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    calibration : string, optional
+        Controls how raw GMM scores are calibrated into log-likelihood ratios.
+        Must be one of 'naive_bayes' (for Gaussian naive Bayes) or 'isotonic'
+        for isotonic regression. Defaults to no calibration.
+
+    lbg : boolean, optional
+        Controls whether to use the LBG algorithm for training.
+        Defaults to False.
+    """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
@@ -287,6 +441,64 @@ class GMMSegmentation(SKLearnMixin):
 
 
 class GMMUBMSegmentation(SKLearnMixin):
+    """
+    Parameters
+    ----------
+
+    n_components : int, optional
+        Number of mixture components. Defaults to 1.
+
+    covariance_type : string, optional
+        String describing the type of covariance parameters to
+        use.  Must be one of 'spherical', 'tied', 'diag', 'full'.
+        Defaults to 'diag'.
+
+    random_state: RandomState or an int seed (None by default)
+        A random number generator instance
+
+    min_covar : float, optional
+        Floor on the diagonal of the covariance matrix to prevent
+        overfitting.  Defaults to 1e-3.
+
+    thresh : float, optional
+        Convergence threshold.
+
+    n_iter : int, optional
+        Number of EM iterations to perform.
+
+    n_init : int, optional
+        Number of initializations to perform. the best results is kept
+
+    params : string, optional
+        Controls which parameters are updated in the training
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    init_params : string, optional
+        Controls which parameters are updated in the initialization
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'wmc'.
+
+    precomputed_ubm : GMM, optional
+        When provided, class GMMs are adapted from this UBM.
+
+    adapt_params : string, optional
+        Controls which parameters are updated in the adaptation
+        process.  Can contain any combination of 'w' for weights,
+        'm' for means, and 'c' for covars.  Defaults to 'm'.
+
+    adapt_iter : int, optional
+        Number of EM iterations to perform during adaptation.
+
+    calibration : string, optional
+        Controls how raw GMM scores are calibrated into log-likelihood ratios.
+        Must be one of 'naive_bayes' (for Gaussian naive Bayes) or 'isotonic'
+        for isotonic regression. Defaults to no calibration.
+
+    lbg : boolean, optional
+        Controls whether to use the LBG algorithm for training.
+        Defaults to False.
+    """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
