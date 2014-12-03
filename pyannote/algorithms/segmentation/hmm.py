@@ -26,12 +26,9 @@
 from __future__ import unicode_literals
 
 import numpy as np
-import itertools
-from ..stats.lbg import LBG
 from ..utils.viterbi import viterbi_decoding, VITERBI_CONSTRAINT_NONE
 from pyannote.core import Annotation
 from pyannote.core.util import pairwise
-import sklearn
 from ..utils.sklearn import SKLearnMixin, LabelConverter
 from ..classification.gmm import \
     SKLearnGMMClassification, SKLearnGMMUBMClassification
@@ -183,7 +180,7 @@ class GMMSegmentation(SKLearnMixin):
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 calibration='isotonic'):
+                 calibration=None, lbg=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -196,6 +193,7 @@ class GMMSegmentation(SKLearnMixin):
         self.init_params = init_params
         self.calibration = calibration
         self.n_jobs = n_jobs
+        self.lbg = lbg
 
     def fit(self, features_iter, annotation_iter):
 
@@ -210,7 +208,8 @@ class GMMSegmentation(SKLearnMixin):
             n_init=self.n_init,
             params=self.params,
             init_params=self.init_params,
-            calibration=self.calibration
+            calibration=self.calibration,
+            lbg=self.lbg
         )
 
         X_iter, y_iter = zip(*list(self.Xy_iter(features_iter,
@@ -293,7 +292,7 @@ class GMMUBMSegmentation(SKLearnMixin):
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
-                 calibration='isotonic'):
+                 calibration=None, lbg=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -310,6 +309,7 @@ class GMMUBMSegmentation(SKLearnMixin):
         self.adapt_params = adapt_params
 
         self.calibration = calibration
+        self.lbg = lbg
         self.n_jobs = n_jobs
 
     def fit(self, features_iter, annotation_iter):
@@ -328,7 +328,8 @@ class GMMUBMSegmentation(SKLearnMixin):
             precomputed_ubm=self.precomputed_ubm,
             adapt_iter=self.adapt_iter,
             adapt_params=self.adapt_params,
-            calibration=self.calibration
+            calibration=self.calibration,
+            lbg=self.lbg
         )
 
         X_iter, y_iter = zip(*list(self.Xy_iter(features_iter,
