@@ -33,7 +33,8 @@ from pyannote.core import Annotation
 from pyannote.core.util import pairwise
 import sklearn
 from ..utils.sklearn import SKLearnMixin, LabelConverter
-from ..classification.gmm import SKLearnGMMClassification, SKLearnGMMUBMClassification
+from ..classification.gmm import \
+    SKLearnGMMClassification, SKLearnGMMUBMClassification
 
 
 class SKLearnGMMSegmentation(SKLearnGMMClassification):
@@ -94,6 +95,85 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
             emission, self.transition_,
             initial=self.initial_,
             consecutive=consecutive, constraint=constraint)
+
+        return sequence
+
+
+class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
+
+    def _n_classes(self,):
+
+        K = len(self.classes_)
+        if self.open_set_:
+            K = K + 1
+
+        return K
+
+    def _fit_structure(self, y_iter):
+
+        K = self._n_classes()
+
+        initial = np.zeros((K, ), dtype=float)
+        transition = np.zeros((K, K), dtype=float)
+
+        for y in y_iter:
+
+            initial[y[0]] += 1
+            for n, m in pairwise(y):
+                transition[n, m] += 1
+
+        # log-probabilities
+        self.initial_ = np.log(initial / np.sum(initial))
+        self.transition_ = np.log(transition.T / np.sum(transition, axis=1)).T
+
+        return self
+
+    def fit(self, X_iter, y_iter):
+
+        y_iter = list(y_iter)
+
+        super(SKLearnGMMUBMSegmentation, self).fit(
+            np.vstack([X for X in X_iter]),
+            np.hstack([y for y in y_iter]))
+
+        self._fit_structure(y_iter)
+
+        return self
+
+    def predict(self, X, consecutive=None, constraint=None):
+        """
+        Parameters
+        ----------
+        X : array-like, shape (N, D)
+        consecutive : array-like, shape (K, )
+        constraint : array-like, shape (N, K)
+
+        N is the number of samples.
+        D is the features dimension.
+        K is the number of classes (including the rejection class as the last
+        class, when appropriate).
+
+        """
+
+        K = self._n_classes()
+
+        N, D = X.shape
+        # assert consecutive.shape == (K, )
+        # assert constraint.shape == (N, K)
+
+        posteriors = self.predict_proba(X)
+
+        if self.open_set_:
+            unknown_posterior = 1. - np.sum(posteriors, axis=1)
+            posteriors = np.vstack([posteriors.T, unknown_posterior.T]).T
+
+        sequence = viterbi_decoding(
+            np.log(posteriors), self.transition_,
+            initial=self.initial_,
+            consecutive=consecutive, constraint=constraint)
+
+        if self.open_set_:
+            sequence[sequence == (K - 1)] = -1
 
         return sequence
 
@@ -205,85 +285,6 @@ class GMMSegmentation(SKLearnMixin):
         translation = self.label_converter_.inverse_mapping()
 
         return annotation.translate(translation)
-
-
-class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
-
-    def _n_classes(self,):
-
-        K = len(self.classes_)
-        if self.open_set_:
-            K = K + 1
-
-        return K
-
-    def _fit_structure(self, y_iter):
-
-        K = self._n_classes()
-
-        initial = np.zeros((K, ), dtype=float)
-        transition = np.zeros((K, K), dtype=float)
-
-        for y in y_iter:
-
-            initial[y[0]] += 1
-            for n, m in pairwise(y):
-                transition[n, m] += 1
-
-        # log-probabilities
-        self.initial_ = np.log(initial / np.sum(initial))
-        self.transition_ = np.log(transition.T / np.sum(transition, axis=1)).T
-
-        return self
-
-    def fit(self, X_iter, y_iter):
-
-        y_iter = list(y_iter)
-
-        super(SKLearnGMMUBMSegmentation, self).fit(
-            np.vstack([X for X in X_iter]),
-            np.hstack([y for y in y_iter]))
-
-        self._fit_structure(y_iter)
-
-        return self
-
-    def predict(self, X, consecutive=None, constraint=None):
-        """
-        Parameters
-        ----------
-        X : array-like, shape (N, D)
-        consecutive : array-like, shape (K, )
-        constraint : array-like, shape (N, K)
-
-        N is the number of samples.
-        D is the features dimension.
-        K is the number of classes (including the rejection class as the last
-        class, when appropriate).
-
-        """
-
-        K = self._n_classes()
-
-        N, D = X.shape
-        # assert consecutive.shape == (K, )
-        # assert constraint.shape == (N, K)
-
-        posteriors = self.predict_proba(X)
-
-        if self.open_set_:
-            unknown_posterior = 1. - np.sum(posteriors, axis=1)
-            posteriors = np.vstack([posteriors.T, unknown_posterior.T]).T
-
-        sequence = viterbi_decoding(
-            np.log(posteriors), self.transition_,
-            initial=self.initial_,
-            consecutive=consecutive, constraint=constraint)
-
-        if self.open_set_:
-            sequence[sequence == (K - 1)] = -1
-
-        return sequence
 
 
 class GMMUBMSegmentation(SKLearnMixin):
