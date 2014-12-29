@@ -441,6 +441,15 @@ class GMMSegmentation(SKLearnMixin):
 
         return annotation.translate(translation)
 
+    @classmethod
+    def resegment(cls, features, annotation,
+                  min_duration=None, constraint=None,
+                  **segmenter_args):
+
+        segmenter = cls(**segmenter_args).fit([features], [annotation])
+        return segmenter.predict(
+            features, min_duration=min_duration, constraint=constraint)
+
 
 class GMMUBMSegmentation(SKLearnMixin):
     """
