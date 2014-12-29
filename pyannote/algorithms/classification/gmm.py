@@ -548,7 +548,9 @@ class GMMClassification(SKLearnMixin):
         ll = self.classifier_.predict_proba(X)
 
         # convert to pyannote-style & aggregate over each segment
-        scores = Scores(uri=segmentation.uri, modality=segmentation.modality)
+        scores = Scores(uri=segmentation.uri, modality=segmentation.modality,
+                        annotation=segmentation,
+                        labels=list(self.label_converter_))
 
         sliding_window = features.sliding_window
 
@@ -694,7 +696,9 @@ class GMMUBMClassification(SKLearnMixin):
         posterior = self.classifier_.predict_proba(X)
 
         # convert to pyannote-style & aggregate over each segment
-        scores = Scores(uri=segmentation.uri, modality=segmentation.modality)
+        scores = Scores(uri=segmentation.uri, modality=segmentation.modality,
+                        annotation=segmentation,
+                        labels=list(self.label_converter_))
 
         sliding_window = features.sliding_window
 
