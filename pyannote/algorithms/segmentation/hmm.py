@@ -376,6 +376,8 @@ class GMMSegmentation(SKLearnMixin):
         encoded_y_iter = [self.label_converter_.transform(y) for y in y_iter]
         self.classifier_.fit(X_iter, encoded_y_iter)
 
+        return self
+
     def _constraint(self, constraint, features):
 
         N = features.getNumber()
@@ -553,6 +555,8 @@ class GMMUBMSegmentation(SKLearnMixin):
 
         encoded_y_iter = [self.label_converter_.transform(y) for y in y_iter]
         self.classifier_.fit(X_iter, encoded_y_iter)
+
+        return self
 
     def _constraint(self, constraint, features):
 
