@@ -91,11 +91,11 @@ def adapt_ubm(ubm, X, adapt_params='m', adapt_iter=10):
 
 
 def fit_naive_bayes(X, y):
-    return LLRNaiveBayes().fit(X, y)
+    return LLRNaiveBayes(equal_priors=True).fit(X, y)
 
 
 def fit_isotonic_regression(X, y):
-    return LLRIsotonicRegression().fit(X, y)
+    return LLRIsotonicRegression(equal_priors=True).fit(X, y)
 
 
 def fit_passthrough(X, y):
