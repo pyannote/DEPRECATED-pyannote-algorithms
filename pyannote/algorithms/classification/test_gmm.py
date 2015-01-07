@@ -25,3 +25,39 @@
 
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
+
+from gmm import SKLearnGMMClassification, SKLearnGMMUBMClassification
+
+
+class Test_GMMClassification:
+
+    def setup(self):
+
+        from sklearn.datasets import load_digits
+        dataset = load_digits(n_class=10)
+
+        X = dataset.data
+        y = dataset.target
+
+        self.trnX = X[::2]
+        self.tstX = X[1::2]
+        self.trny = y[::2]
+        self.tsty = y[1::2]
+
+    def test_gmm(self):
+        gmm = SKLearnGMMClassification(n_components=8,
+                                       calibration='pass')
+        gmm.fit(self.trnX, self.trny)
+        assert gmm.score(self.tstX, self.tsty) > 0.85
+
+    def test_gmmubm(self):
+        gmm = SKLearnGMMUBMClassification(n_components=8,
+                                          calibration='pass')
+        gmm.fit(self.trnX, self.trny)
+        assert gmm.score(self.tstX, self.tsty) > 0.85
+
+    def test_isotonic(self):
+        gmm = SKLearnGMMUBMClassification(n_components=8,
+                                          calibration='isotonic')
+        gmm.fit(self.trnX, self.trny)
+        assert gmm.score(self.tstX, self.tsty) > 0.85

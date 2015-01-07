@@ -27,161 +27,98 @@ from __future__ import unicode_literals
 
 import numpy as np
 from sklearn.isotonic import IsotonicRegression
-from sklearn.linear_model import LinearRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.base import BaseEstimator, TransformerMixin
 
 
-class LLR(object):
+class LLRPassthrough(BaseEstimator, TransformerMixin):
 
-    def _get_scores_ratios(self, X, Y, nbins=100):
+    def fit(self, X, y):
+        return self
 
-        finite = np.isfinite(X)
-        positive = X[np.where((Y == 1) & finite)]
-        negative = X[np.where((Y == 0) & finite)]
-
-        # todo: smarter bins (bayesian blocks)
-        # see jakevdp.github.io/blog/2012/09/12/dynamic-programming-in-python/
-        m = min(np.min(positive), np.min(negative))
-        M = max(np.max(positive), np.max(negative))
-        bins = np.arange(m, M, (M - m) / nbins)
-
-        # histograms
-        p, _ = np.histogram(positive, bins=bins, density=True)
-        n, _ = np.histogram(negative, bins=bins, density=True)
-
-        scores = .5 * (bins[:-1] + bins[1:])
-        ratios = np.log(1. * p / n)
-
-        ok = np.where(np.isfinite(ratios))
-        scores = scores[ok]
-        ratios = ratios[ok]
-
-        # todo: remove bins based on Doddington's "rule of 30"
-        # P, _ = np.histogram(positive, bins=bins, density=False)
-        # N, _ = np.histogram(negative, bins=bins, density=False)
-        # ok = np.where(np.minimum(P, N) > 30)
-        # scores = scores[ok]
-        # ratios = ratios[ok]
-
-        return scores, ratios
-
-    def _get_prior(self, X, Y):
-
-        positive = X[np.where(Y == 1)]
-        negative = X[np.where(Y == 0)]
-        return 1. * len(positive) / (len(positive) + len(negative))
-
-    def toPosteriorProbability(self, scores):
-        """Get posterior probability given scores
-
-        Parameters
-        ----------
-        scores : numpy array
-            Test scores
-
-        prior : float, optional
-            By default, prior is set to the one estimated with .fit()
-
-        Returns
-        -------
-        posterior : numpy array
-            Posterior probability array with same shape as input `scores`
-
-        """
-
-        # Get log-likelihood ratio
-        llr = self.toLogLikelihoodRatio(scores)
-
-        # Get prior
-        if self.equal_priors:
-            prior = 0.5
-        else:
-            prior = self.prior
-
-        priorRatio = (1. - prior) / prior
-
-        # Compute posterior probability
-        return 1 / (1 + priorRatio * np.exp(-llr))
+    def transform(self, X):
+        return X
 
 
-class LLRIsotonicRegression(LLR):
-    """Log-likelihood ratio estimation by isotonic regression"""
+class LLRNaiveBayes(GaussianNB):
 
     def __init__(self, equal_priors=False):
+        super(LLRNaiveBayes, self).__init__()
+        self.equal_priors = equal_priors
+
+    def fit(self, X, y):
+        X = X.reshape((-1, 1))
+        super(LLRNaiveBayes, self).fit(X, y)
+        if self.equal_priors:
+            self.class_prior_[:] = 1. / len(self.class_prior_)
+        return self
+
+    def transform(self, X):
+        X = X.reshape((-1, 1))
+        log_proba = self.predict_log_proba(X)
+        return np.diff(log_proba).reshape((-1, ))
+
+
+class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
+
+    def __init__(self, equal_priors=False, y_min=1e-4, y_max=1. - 1e-4):
         super(LLRIsotonicRegression, self).__init__()
         self.equal_priors = equal_priors
+        self.y_min = y_min
+        self.y_max = y_max
 
-    def fit(self, X, Y):
+    def fit(self, X, y):
 
-        self.prior = self._get_prior(X, Y)
+        if self.equal_priors:
 
-        scores, ratios = self._get_scores_ratios(X, Y)
+            positive = X[y == 1]
+            n_positive = len(positive)
+            negative = X[y == 0]
+            n_negative = len(negative)
 
-        y_min = np.min(ratios)
-        y_max = np.max(ratios)
-        self.ir = IsotonicRegression(y_min=y_min, y_max=y_max)
-        self.ir.fit(scores, ratios)
+            if n_positive > n_negative:
+                # downsample positive examples
+                positive = np.random.choice(positive,
+                                            size=(n_negative, ),
+                                            replace=False)
+                n_positive = len(positive)
 
-        return self
+            else:
+                # downsample negative examples
+                negative = np.random.choice(negative,
+                                            size=(n_positive, ),
+                                            replace=False)
+                n_negative = len(negative)
 
-    def toLogLikelihoodRatio(self, scores):
-        """Get log-likelihood ratio given scores
+            X = np.hstack([negative, positive])
+            y = np.hstack([
+                np.zeros((n_negative, ), dtype=int),
+                np.ones((n_positive, ), dtype=int)
+            ])
 
-        Parameters
-        ----------
-        scores : numpy array
-            Test scores
+        n_samples = X.shape[0]
 
-        Returns
-        -------
-        llr : numpy array
-            Log-likelihood ratio array with same shape as input `scores`
-        """
-        x_min = np.min(self.ir.X_)
-        x_max = np.max(self.ir.X_)
+        # hack for numpy
+        _X_, f8 = str('X'), str('f8')
+        _y_, i1 = str('y'), str('i1')
 
-        oob_min = np.where(scores < x_min)
-        oob_max = np.where(scores > x_max)
-        ok = np.where((scores >= x_min) * (scores <= x_max))
+        Xy = np.zeros((n_samples, ), dtype=[(_X_, f8), (_y_, i1)])
+        Xy[_X_] = X
+        Xy[_y_] = y
 
-        calibrated = np.zeros(scores.shape)
-        calibrated[ok] = self.ir.transform(scores[ok])
-        calibrated[oob_min] = self.ir.y_min
-        calibrated[oob_max] = self.ir.y_max
-        return calibrated
+        sorted_Xy = np.sort(Xy, order=_X_)
 
+        self.regression_ = IsotonicRegression(y_min=self.y_min,
+                                              y_max=self.y_max,
+                                              out_of_bounds='clip')
 
-class LLRLinearRegression(LLR):
-    """Log-likelihood ratio estimation by linear regression"""
-
-    def __init__(self, equal_priors=False):
-        super(LLRLinearRegression, self).__init__()
-        self.equal_priors = equal_priors
-
-    def fit(self, X, Y):
-
-        self.prior = self._get_prior(X, Y)
-
-        scores, ratios = self._get_scores_ratios(X, Y)
-
-        self.lr = LinearRegression(fit_intercept=True, normalize=False)
-        self.lr.fit(scores, ratios)
+        self.regression_.fit(sorted_Xy[_X_], sorted_Xy[_y_])
 
         return self
 
-    def toLogLikelihoodRatio(self, scores):
-        """Get log-likelihood ratio given scores
-
-        Parameters
-        ----------
-        scores : numpy array
-            Test scores
-
-        Returns
-        -------
-        llr : numpy array
-            Log-likelihood ratio array with same shape as input `scores`
-        """
-        return self.lr.transform(scores)
+    def transform(self, X):
+        p = self.regression_.transform(X)
+        return np.log(p) - np.log(1. - p)
 
 
 def logsumexp(a, b=None, axis=0):

@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2014 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,13 +23,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 from __future__ import unicode_literals
 
 import numpy as np
+import itertools
+
+VITERBI_CONSTRAINT_NONE = 0
+VITERBI_CONSTRAINT_FORBIDDEN = 1
+VITERBI_CONSTRAINT_MANDATORY = 2
 
 
 def viterbi_decoding(emission, transition,
-                     initial=None, consecutive=None, force=None):
+                     initial=None, consecutive=None, constraint=None):
     """Viterbi decoding
 
     Parameters
@@ -43,9 +51,10 @@ def viterbi_decoding(emission, transition,
     consecutive : optional, int or int array of shape (n_states, )
         C[i] is a the minimum-consecutive-states constraint for state i.
         C[i] = 1 is equivalent to no constraint.
-    force : optional, array of shape (n_samples, )
-        F[t] = i forces sample t to be in state i.
-        Use F[t] = -1 for no constraint.
+    constraint : optional, array of shape (n_samples, n_states)
+        K[t, i] = 1 forbids state i at time t.
+        K[t, i] = 2 forces state i at time t.
+        Use K[t, i] = 0 for no constraint (default).
 
     Returns
     -------
@@ -65,18 +74,58 @@ def viterbi_decoding(emission, transition,
 
     # ~~ INITIALIZATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+    # balance initial probabilities when they are not provided
     if initial is None:
         initial = np.log(np.ones((K, )) / K)
 
-    if force is None:
-        F = -np.ones((T, ), dtype=int)
-    else:
-        F = np.array(force, dtype=int).reshape((T, ))
+    # mandatory[t] = k is state k is mandatory at time t
+    # mandatory[t] = -1 means no mandatory state
+    mandatory = -np.ones((T,), dtype=int)
 
+    # must_change_state[t] = 1 if one must change state
+    # between times t-1 and t according to constraints
+    # must_change_state[t] = 0 means there is no need (but it is allowed)
+    must_change_state = np.zeros((T, ), dtype=int)
+
+    # deal with constraints, when they are provided
+    if constraint is not None:
+
+        # make a copy of emission probabilities before modifying them
+        emission = np.array(emission)
+
+        # set emission probability to zero for forbidden states
+        emission[
+            np.where(constraint == VITERBI_CONSTRAINT_FORBIDDEN)] = -np.inf
+
+        # iterate over mandatory states
+        for t, k in itertools.izip(
+            *np.where(constraint == VITERBI_CONSTRAINT_MANDATORY)
+        ):
+            # remember that state k is mandatory at time t
+            mandatory[t] = k
+
+            # set emission probability to zero
+            # for all states but the mandatory one
+            emission[t, states != k] = -np.inf
+
+        # one must change state if it is mandatory at time t-1
+        # and then forbidden at time t
+        must_change_state[
+            np.where(
+                (constraint[:-1, :] == VITERBI_CONSTRAINT_MANDATORY) &
+                (constraint[1:, :] == VITERBI_CONSTRAINT_FORBIDDEN)
+            )[0] + 1
+        ] = 1
+
+    # no minimum-consecutive-states constraints
     if consecutive is None:
         D = np.ones((K, ), dtype=int)
+
+    # same value for all states
     elif isinstance(consecutive, int):
         D = consecutive * np.ones((K, ), dtype=int)
+
+    # (potentially) different values per state
     else:
         D = np.array(consecutive, dtype=int).reshape((K, ))
 
@@ -84,11 +133,6 @@ def viterbi_decoding(emission, transition,
     V[0, :] = emission[0, :] + initial  # most probable state sequence for the
                                         # first t observations that has k as
                                         # its final state.
-
-    # in case time t=0 is forced in a specific state
-    if F[0] >= 0:
-        # artificially set V[0, k] to -inf if k != F[0]
-        V[0, states != F[0]] = -np.inf
 
     P = np.empty((T, K), dtype=int)  # P[t, k] remembers which state was used
     P[0, :] = states                 # to get from time t-1 to time t at
@@ -101,29 +145,34 @@ def viterbi_decoding(emission, transition,
     # ~~ FORWARD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for t in range(1, T):
 
+        # make a copy of transition probabilities before modifying them
         _transition = np.array(transition)
 
-        if F[t] < 0:
+        # in case there is no state constraint at time t
+        # deal with "consecutive states" constraint
+        if mandatory[t] < 0 and not must_change_state[t]:
+
             # zero transition probability for paths
             # that do not match `consecutive` constraint
             for k in states:
-                if C[t - 1, k] < D[k]:
-                    _transition[k, states != k] = -np.inf
 
-        else:
-            # zero transition probability for paths
-            # that do not match `force` constraint
-            _transition[:, states != F[t]] = -np.inf
+                # not yet long enough in state k?
+                if C[t - 1, k] < D[k]:
+                    # cannot transition from state k to state k' != k
+                    _transition[k, states != k] = -np.inf
 
         # tmp[k, k'] is the probability of the most probable path
         # leading to state k at time t - 1, plus the probability of
         # transitioning from state k to state k' (at time t)
-        tmp = V[t - 1, :] + _transition.T
+        tmp = (V[t - 1, :] + _transition.T).T
 
-        P[t, :] = np.argmax(tmp, axis=1)
+        # optimal path to state k at t comes from state P[t, k] at t - 1
+        # (find among all possible states at this time t)
+        P[t, :] = np.argmax(tmp, axis=0)
 
         # update C[t, :]
         for k in states:
+
             # optimal path reaching state k at time t
             # actually came from state k at time t-1
             if P[t, k] == k:
@@ -134,7 +183,8 @@ def viterbi_decoding(emission, transition,
             else:
                 C[t, k] = 1
 
-        V[t, :] = emission[t, :] + tmp[states, P[t, :]]
+        # update V for time t
+        V[t, :] = emission[t, :] + tmp[P[t, :], states]
 
     # ~~ BACK-TRACKING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     X = np.empty((T,), dtype=int)
@@ -143,5 +193,3 @@ def viterbi_decoding(emission, transition,
         X[-(t + 1)] = P[-t, X[-t]]
 
     return X
-
-
