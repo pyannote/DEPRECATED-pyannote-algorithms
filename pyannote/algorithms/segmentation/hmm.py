@@ -473,10 +473,17 @@ class GMMSegmentation(SKLearnMixin):
 
     @classmethod
     def resegment(cls, features, annotation,
+                  equal_priors=True, calibration=None,
                   min_duration=None, constraint=None,
                   **segmenter_args):
 
-        segmenter = cls(**segmenter_args).fit([features], [annotation])
+        segmenter = cls(
+            equal_priors=equal_priors,
+            calibration=calibration,
+            **segmenter_args)
+
+        segmenter.fit([features], [annotation])
+
         return segmenter.predict(
             features, min_duration=min_duration, constraint=constraint)
 
