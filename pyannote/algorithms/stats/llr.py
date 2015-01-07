@@ -42,10 +42,15 @@ class LLRPassthrough(BaseEstimator, TransformerMixin):
 
 class LLRNaiveBayes(GaussianNB):
 
+    def __init__(self, equal_priors=False):
+        super(LLRNaiveBayes, self).__init__()
+        self.equal_priors = equal_priors
+
     def fit(self, X, y):
         X = X.reshape((-1, 1))
         super(LLRNaiveBayes, self).fit(X, y)
-        self.class_prior_[:] = 1. / len(self.class_prior_)  # equal prior
+        if self.equal_priors:
+            self.class_prior_[:] = 1. / len(self.class_prior_)
         return self
 
     def transform(self, X):
@@ -56,9 +61,44 @@ class LLRNaiveBayes(GaussianNB):
 
 class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
 
+    def __init__(self, equal_priors=False, y_min=1e-4, y_max=1. - 1e-4):
+        super(LLRIsotonicRegression, self).__init__()
+        self.equal_priors = equal_priors
+        self.y_min = y_min
+        self.y_max = y_max
+
     def fit(self, X, y):
 
+        if self.equal_priors:
+
+            positive = X[y == 1]
+            n_positive = len(positive)
+            negative = X[y == 0]
+            n_negative = len(negative)
+
+            if n_positive > n_negative:
+                # downsample positive examples
+                positive = np.random.choice(positive,
+                                            size=(n_negative, ),
+                                            replace=False)
+                n_positive = len(positive)
+
+            else:
+                # downsample negative examples
+                negative = np.random.choice(negative,
+                                            size=(n_positive, ),
+                                            replace=False)
+                n_negative = len(negative)
+
+            X = np.hstack([negative, positive])
+            y = np.hstack([
+                np.zeros((n_negative, ), dtype=int),
+                np.ones((n_positive, ), dtype=int)
+            ])
+
         n_samples = X.shape[0]
+
+        # hack for numpy
         _X_, f8 = str('X'), str('f8')
         _y_, i1 = str('y'), str('i1')
 
@@ -68,7 +108,8 @@ class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
 
         sorted_Xy = np.sort(Xy, order=_X_)
 
-        self.regression_ = IsotonicRegression(y_min=1e-4, y_max=1. - 1e-4,
+        self.regression_ = IsotonicRegression(y_min=self.y_min,
+                                              y_max=self.y_max,
                                               out_of_bounds='clip')
 
         self.regression_.fit(sorted_Xy[_X_], sorted_Xy[_y_])
