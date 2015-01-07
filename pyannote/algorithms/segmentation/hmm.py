@@ -26,8 +26,11 @@
 from __future__ import unicode_literals
 
 import numpy as np
-from ..utils.viterbi import viterbi_decoding, VITERBI_CONSTRAINT_NONE
-from pyannote.core import Annotation
+from ..utils.viterbi import viterbi_decoding, \
+    VITERBI_CONSTRAINT_NONE, \
+    VITERBI_CONSTRAINT_MANDATORY, \
+    VITERBI_CONSTRAINT_FORBIDDEN
+from pyannote.core import Annotation, Scores
 from pyannote.core.util import pairwise
 from ..utils.sklearn import SKLearnMixin, LabelConverter
 from ..classification.gmm import \
@@ -394,11 +397,26 @@ class GMMSegmentation(SKLearnMixin):
         mapping = self.label_converter_.mapping()
         sliding_window = features.sliding_window
 
+        # defaults to no constraint
         constraint_ = VITERBI_CONSTRAINT_NONE * np.ones((N, K), dtype=int)
-        if constraint is not None:
+
+        if isinstance(constraint, Scores):
+
             for segment, _, label, value in constraint.itervalues():
                 t, dt = sliding_window.segmentToRange(segment)
                 constraint_[t:t + dt, mapping[label]] = value
+
+        if isinstance(constraint, Annotation):
+
+            # forbidden everywhere...
+            for label in constraint.labels():
+                constraint_[:, mapping[label]] = VITERBI_CONSTRAINT_FORBIDDEN
+
+            # ... but in labeled segments
+            for segment, _, label in constraint.itertracks(label=True):
+                t, dt = sliding_window.segmentToRange(segment)
+                constraint_[t:t + dt, mapping[label]] = \
+                    VITERBI_CONSTRAINT_MANDATORY
 
         return constraint_
 
@@ -426,6 +444,7 @@ class GMMSegmentation(SKLearnMixin):
         ----------
         min_duration : float or dict, optional
             Minimum duration for each label, in seconds.
+        constraint : Annotation or Scores, optional
         """
 
         constraint_ = self._constraint(constraint, features)
