@@ -1,3 +1,10 @@
+### Version 0.2 (2015-01-07)
+
+  - feat(classification): GMM- and GMM/UBM-based classification
+  - feat(segmentation): constrained Viterbi segmentation
+  - improve: improve log-likelihood ratio calibration
+  - setup: switch to pyannote.core 0.3+
+
 ### Version 0.1 (2014-10-30)
 
   - feat: HMM classification (with Viterbi decoding)
