@@ -78,7 +78,7 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
         'm' for means, and 'c' for covars.  Defaults to 'wmc'.
 
     calibration : string, optional
-        Controls how raw GMM scores are calibrated into log-likelihood ratios.
+        Controls how log-likelihoods are calibrated into log-likelihood ratios.
         Must be one of 'naive_bayes' (for Gaussian naive Bayes) or 'isotonic'
         for isotonic regression. Defaults to no calibration.
 
@@ -140,7 +140,10 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
 
         """
 
-        emission = self.predict_log_proba(X)
+        if self.calibration is None:
+            emission = self.predict_log_likelihood(X)
+        else:
+            emission = self.predict_log_proba(X)
 
         sequence = viterbi_decoding(
             emission, self.transition_,
