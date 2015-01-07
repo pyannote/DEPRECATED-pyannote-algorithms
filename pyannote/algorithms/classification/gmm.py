@@ -232,11 +232,11 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
         fit_calibration = self._get_fit_calibration()
 
-        raw_scores = self._raw_scores(X)
+        scores = self._uncalibrated_scores(X)
 
         self.calibrations_ = Parallel(n_jobs=self.n_jobs)(
             delayed(fit_calibration)(
-                raw_scores[:, i],
+                scores[:, i],
                 np.array(y == k, dtype=int)
             )
             for i, k in enumerate(self.classes_))
@@ -255,24 +255,33 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
         return self
 
-    def _raw_scores(self, X):
+    # -- UNCALIBRATED SCORES --------------------------------------------------
+
+    def predict_log_likelihood(self, X):
         return np.array([
             estimator.score(X)
             for estimator in self.estimators_
         ]).T
 
-    def scores(self, X):
-        # return estimated log p(X|i) - log p(X|~i) for each each class i
+    def _uncalibrated_scores(self, X):
+        return self.predict_log_likelihood(X)
 
-        scores = self._raw_scores(X)
+    # -- (CALIBRATED) LOG-LIKELIHOOD RATIOS -----------------------------------
+
+    def predict_log_likelihood_ratio(self, X):
+
+        scores = self._uncalibrated_scores(X)
         for i, calibration in enumerate(self.calibrations_):
             scores[:, i] = calibration.transform(scores[:, i])
 
         return scores
 
-    def predict_log_proba(self, X):
+    # -- POSTERIOR PROBABILITIES ----------------------------------------------
 
-        ll_ratio = self.scores(X)
+    def predict_log_proba(self, X):
+        """Posterior log-probability"""
+
+        ll_ratio = self.predict_log_likelihood_ratio(X)
         prior = self.prior_
 
         if self.open_set_:
@@ -295,7 +304,11 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         return posterior
 
     def predict_proba(self, X):
+        """Posterior probability"""
+
         return np.exp(self.predict_log_proba(X))
+
+    # -------------------------------------------------------------------------
 
     def predict(self, X):
 
@@ -440,7 +453,9 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
             adapt_params=self.adapt_params,
             adapt_iter=self.adapt_iter) for k in self.classes_)
 
-    def _raw_scores(self, X):
+    # -- UNCALIBRATED SCORES --------------------------------------------------
+
+    def _uncalibrated_scores(self, X):
         # should return log-likelihood ratio for each each class
         # log p(X|i) - log p(X|~i) instead of just log p(X|i)
         # here it is approximated as log p(X|i) - log p(X|ω)
