@@ -137,7 +137,7 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
 
         """
 
-        emission = self.predict_proba(X)
+        emission = self.predict_log_proba(X)
 
         sequence = viterbi_decoding(
             emission, self.transition_,
