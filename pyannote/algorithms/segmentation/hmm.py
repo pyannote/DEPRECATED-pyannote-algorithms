@@ -82,6 +82,9 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
     lbg : boolean, optional
         Controls whether to use the LBG algorithm for training.
         Defaults to False.
+
+    equal_priors : boolean, optional
+        Defaults to False
     """
 
     def _n_classes(self,):
@@ -329,12 +332,15 @@ class GMMSegmentation(SKLearnMixin):
     lbg : boolean, optional
         Controls whether to use the LBG algorithm for training.
         Defaults to False.
+
+    equal_priors : boolean, optional
+        Defaults to False.
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=100, n_init=1, params='wmc', init_params='wmc',
-                 calibration=None, lbg=False):
+                 calibration=None, lbg=False, equal_priors=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
@@ -348,6 +354,7 @@ class GMMSegmentation(SKLearnMixin):
         self.calibration = calibration
         self.n_jobs = n_jobs
         self.lbg = lbg
+        self.equal_priors = equal_priors
 
     def fit(self, features_iter, annotation_iter):
 
@@ -363,7 +370,8 @@ class GMMSegmentation(SKLearnMixin):
             params=self.params,
             init_params=self.init_params,
             calibration=self.calibration,
-            lbg=self.lbg
+            lbg=self.lbg,
+            equal_priors=self.equal_priors
         )
 
         X_iter, y_iter = zip(*list(self.Xy_iter(features_iter,

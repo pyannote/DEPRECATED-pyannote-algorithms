@@ -150,12 +150,15 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
     lbg : boolean, optional
         Controls whether to use the LBG algorithm for training.
         Defaults to False.
+
+    equal_priors : bool, optional
+        Defaults to False.
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
-                 calibration=None, lbg=False):
+                 calibration=None, lbg=False, equal_priors=False):
 
         super(SKLearnGMMClassification, self).__init__()
 
@@ -173,6 +176,8 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
         self.calibration = calibration
         self.lbg = lbg
+
+        self.equal_priors = equal_priors
 
     def _fit_priors(self, y):
 
@@ -276,6 +281,9 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
             # append "unknown" log-likelihood ratio (zeros)
             zeros = np.zeros((ll_ratio.shape[0], 1))
             ll_ratio = np.hstack([ll_ratio, zeros])
+
+        if self.equal_priors:
+            prior = np.ones(prior.shape) / len(prior)
 
         posterior = ((np.log(prior) + ll_ratio).T -
                      logsumexp(ll_ratio, b=prior, axis=1)).T
