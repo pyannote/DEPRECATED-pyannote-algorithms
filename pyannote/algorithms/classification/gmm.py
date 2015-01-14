@@ -270,6 +270,11 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
 
     def predict_log_likelihood_ratio(self, X):
 
+        # log-likelihood ratio cannot be estimated from raw scores
+        # when no calibration was trained
+        if self.calibration is None:
+            raise NotImplementedError('Not supported without calibration')
+
         scores = self._uncalibrated_scores(X)
         for i, calibration in enumerate(self.calibrations_):
             scores[:, i] = calibration.transform(scores[:, i])
@@ -311,6 +316,14 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
     # -------------------------------------------------------------------------
 
     def predict(self, X):
+
+        # when no calibration was trained
+        # use raw log-likelihood to perform prediction
+        if self.calibration is None:
+            return np.argmax(self.predict_log_likelihood(X), axis=1)
+
+        # otherwise, calibrate them into actual posterior probability
+        # before taking the decision
 
         n = X.shape[0]
         y = -np.ones((X.shape[0],), dtype=float)
@@ -467,6 +480,21 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
         ll_ratio = (ll.T - ll_ubm).T
         return ll_ratio
 
+    # overrides SKLearnGMMClassification.predict_log_likelihood_ratio
+    # as GMM/UBM raw scores are (kind of) log-likelhood ratio
+    def predict_log_likelihood_ratio(self, X):
+
+        scores = self._uncalibrated_scores(X)
+
+        if self.calibration is None:
+            return scores
+
+        # calibrate raw scores if calibration is available
+        for i, calibration in enumerate(self.calibrations_):
+            scores[:, i] = calibration.transform(scores[:, i])
+
+        return scores
+
 
 class GMMClassification(SKLearnMixin):
     """
@@ -573,11 +601,7 @@ class GMMClassification(SKLearnMixin):
 
         return self
 
-    def predict_proba(self, features, segmentation):
-
-        # posterior probabilities sklearn-style
-        X = self.X(features, unknown='keep')
-        ll = self.classifier_.predict_proba(X)
+    def _as_scores(self, raw, features, segmentation):
 
         # convert to pyannote-style & aggregate over each segment
         scores = Scores(uri=segmentation.uri, modality=segmentation.modality,
@@ -588,19 +612,37 @@ class GMMClassification(SKLearnMixin):
 
         for segment, track in segmentation.itertracks():
 
-            # extract ll for all features in segment and aggregate
+            # extract raw for all features in segment and aggregate
             i_start, i_duration = sliding_window.segmentToRange(segment)
-            p = np.mean(ll[i_start:i_start + i_duration, :], axis=0)
+            p = np.mean(raw[i_start:i_start + i_duration, :], axis=0)
 
             for i, label in enumerate(self.label_converter_):
                 scores[segment, track, label] = p[i]
 
         return scores
 
+    def predict_log_likelihood(self, features, segmentation):
+        X = self.X(features, unknown='keep')
+        log_likelihood = self.classifier_.predict_log_likelihood(X)
+        return self._as_scores(log_likelihood, features, segmentation)
+
+    def predict_proba(self, features, segmentation):
+        X = self.X(features, unknown='keep')
+        proba = self.classifier_.predict_proba(X)
+        return self._as_scores(proba, features, segmentation)
+
     def predict(self, features, segmentation):
 
+        # when no calibration was trained
+        # use raw log-likelihood to perform prediction
+        if self.calibration is None:
+            scores = self.predict_log_likelihood(features, segmentation)
+            return scores.to_annotation(posterior=False)
+
+        # otherwise, calibrate them into actual posterior probability
+        # before taking the decision
         scores = self.predict_proba(features, segmentation)
-        return scores.to_annotation(posterior=False)
+        return scores.to_annotation(posterior=True)
 
 
 class GMMUBMClassification(SKLearnMixin):
