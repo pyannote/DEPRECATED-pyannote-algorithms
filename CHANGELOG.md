@@ -1,3 +1,8 @@
+### Version 0.2.1 (2015-01-14)
+
+  - fix: missing 'equal_priors' option
+  - fix: GMM-based classification without score calibration
+
 ### Version 0.2 (2015-01-07)
 
   - feat(classification): GMM- and GMM/UBM-based classification
