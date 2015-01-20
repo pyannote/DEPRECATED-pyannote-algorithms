@@ -48,9 +48,10 @@ def viterbi_decoding(emission, transition,
         T[i, j] is the transition log-probabilities from state i to state j.
     initial : optional, array of shape (n_states, )
         I[i] is the initial log-probabilities of state i.
+        Defaults to equal log-probabilities.
     consecutive : optional, int or int array of shape (n_states, )
         C[i] is a the minimum-consecutive-states constraint for state i.
-        C[i] = 1 is equivalent to no constraint.
+        C[i] = 1 is equivalent to no constraint (default).
     constraint : optional, array of shape (n_samples, n_states)
         K[t, i] = 1 forbids state i at time t.
         K[t, i] = 2 forces state i at time t.
