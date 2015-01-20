@@ -45,14 +45,12 @@ class Test_GMMClassification:
         self.tsty = y[1::2]
 
     def test_gmm(self):
-        gmm = SKLearnGMMClassification(n_components=8,
-                                       calibration='pass')
+        gmm = SKLearnGMMClassification(n_components=8)
         gmm.fit(self.trnX, self.trny)
         assert gmm.score(self.tstX, self.tsty) > 0.85
 
     def test_gmmubm(self):
-        gmm = SKLearnGMMUBMClassification(n_components=8,
-                                          calibration='pass')
+        gmm = SKLearnGMMUBMClassification(n_components=8)
         gmm.fit(self.trnX, self.trny)
         assert gmm.score(self.tstX, self.tsty) > 0.85
 
