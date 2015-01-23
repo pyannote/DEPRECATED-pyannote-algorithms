@@ -187,3 +187,46 @@ class Gaussian(object):
         return np.float(
             dmean.dot(np.sqrt(self.inv_covar * g.inv_covar)).dot(dmean.T)
         )
+def bayesianInformationCriterion(g1, g2, g=None, penalty_coef=1.,
+                                 returns_terms=False):
+    """Returns Bayesian Information Criterion from 2 Gaussians
+
+    Parameters
+    ----------
+    g1, g2 : Gaussian
+    penalty_coef: float, optional
+        Defaults to 1.
+    g : Gaussian, optional
+        Precomputed merge of g1 and g2
+    returns_terms : boolean, optional
+        Returns (ratio, penalty) tuple instead of ratio - 𝝀 x penalty
+    """
+
+    # merge gaussians if precomputed version is not provided
+    if g is None:
+        g = g1.merge(g2)
+
+    # number of samples for each gaussian
+    n1 = g1.n_samples
+    n2 = g2.n_samples
+    n = n1 + n2
+
+    # first term of Bayesian information criterion
+    ldc = g.log_det_covar if n > 0 else 0.
+    ldc1 = g1.log_det_covar if n1 > 0 else 0.
+    ldc2 = g2.log_det_covar if n2 > 0 else 0.
+    ratio = n * ldc - n1 * ldc1 - n2 * ldc2
+
+    # second term of Bayesian information criterion
+    d = g.mean.shape[1]  # number of free parameters
+    if g.covariance_type == 'diag':
+        n_parameters = 2 * d
+    else:
+        n_parameters = d + (d * (d + 1)) / 2
+    penalty = n_parameters * np.log(n)
+
+    if returns_terms:
+        return ratio, penalty
+
+    else:
+        return ratio - penalty_coef * penalty
