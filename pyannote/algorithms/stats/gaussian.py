@@ -187,6 +187,86 @@ class Gaussian(object):
         return np.float(
             dmean.dot(np.sqrt(self.inv_covar * g.inv_covar)).dot(dmean.T)
         )
+
+
+class RollingGaussian(Gaussian):
+
+    def __init__(self, covariance_type='full'):
+        super(RollingGaussian, self).__init__(covariance_type=covariance_type)
+        self.mean = None
+        self.covar = None
+        self.n_samples = 0
+        self.start = 0
+        self.end = 0
+
+    def fit(self, X, start=None, end=None):
+
+        if start is None:
+            start = 0
+        if end is None:
+            end = len(X)
+
+        # first call to fit...
+        if self.n_samples == 0:
+            self.start = start
+            self.end = end
+            return super(RollingGaussian, self).fit(X[start:end])
+
+        i_index = range(start, self.start) + range(self.end, end)
+        o_index = range(self.start, start) + range(end, self.end)
+
+        i_x = np.take(X, i_index, axis=0)
+        o_x = np.take(X, o_index, axis=0)
+
+        n_old = self.n_samples
+        n_in = len(i_x)
+        n_out = len(o_x)
+        n_new = n_old + n_in - n_out
+
+        # estimate new mean
+
+        d = X.shape[1]
+
+        mu_old = self.mean
+        mu_in = (np.mean(i_x, axis=0).reshape((1, -1))
+                 if n_in else np.zeros((1, d)))
+        mu_out = (np.mean(o_x, axis=0).reshape((1, -1))
+                  if n_out else np.zeros((1, d)))
+        mu_new = ((n_old * mu_old + n_in * mu_in - n_out * mu_out) /
+                  (n_old + n_in - n_out))
+
+        # estimate new covariance
+
+        cov_old = self.covar
+
+        cov_in = (np.cov(i_x.T, ddof=0)
+                  if n_in else np.zeros((d, d)))
+        cov_out = (np.cov(o_x.T, ddof=0)
+                   if n_out else np.zeros((d, d)))
+
+        cov_new = (
+            (
+                n_old * (cov_old + np.dot(mu_old.T, mu_old))
+                + n_in * (cov_in + np.dot(mu_in.T, mu_in))
+                - n_out * (cov_out + np.dot(mu_out.T, mu_out))
+            ) / (n_old + n_in - n_out) - np.dot(mu_new.T, mu_new)
+        )
+
+        if self.covariance_type == 'diag':
+            cov_new = np.diag(np.diag(cov_new, k=0))
+
+        # remember everything
+
+        self.start = start
+        self.end = end
+        self.n_samples = n_new
+
+        self.mean = mu_new
+        self.covar = cov_new
+
+        return self
+
+
 def bayesianInformationCriterion(g1, g2, g=None, penalty_coef=1.,
                                  returns_terms=False):
     """Returns Bayesian Information Criterion from 2 Gaussians
