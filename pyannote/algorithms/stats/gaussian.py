@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -123,14 +123,14 @@ class Gaussian(object):
             # mean
             m1 = self.mean.reshape((1, -1))
             m2 = other.mean.reshape((1, -1))
-            m = (n1*m1+n2*m2)/n
+            m = (n1 * m1 + n2 * m2) / n
             g.mean = m
 
             # covariance
             k1 = self.covar
             k2 = other.covar
-            k = 1./n * (n1*(k1+np.dot(m1.T, m1)) +
-                        n2*(k2+np.dot(m2.T, m2))) \
+            k = 1. / n * (n1 * (k1 + np.dot(m1.T, m1)) +
+                          n2 * (k2 + np.dot(m2.T, m2))) \
                 - np.dot(m.T, m)
 
             # make it diagonal if needed
