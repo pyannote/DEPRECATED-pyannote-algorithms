@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -123,14 +123,14 @@ class Gaussian(object):
             # mean
             m1 = self.mean.reshape((1, -1))
             m2 = other.mean.reshape((1, -1))
-            m = (n1*m1+n2*m2)/n
+            m = (n1 * m1 + n2 * m2) / n
             g.mean = m
 
             # covariance
             k1 = self.covar
             k2 = other.covar
-            k = 1./n * (n1*(k1+np.dot(m1.T, m1)) +
-                        n2*(k2+np.dot(m2.T, m2))) \
+            k = 1. / n * (n1 * (k1 + np.dot(m1.T, m1)) +
+                          n2 * (k2 + np.dot(m2.T, m2))) \
                 - np.dot(m.T, m)
 
             # make it diagonal if needed
@@ -141,40 +141,16 @@ class Gaussian(object):
 
         return g
 
-    def bic(self, other, penalty_coef=3.5):
+    def bic(self, other, penalty_coef=3.5, merged=None):
 
-        # merge self and other
-        g = self.merge(other)
-
-        # number of free parameters
-        d, _ = g.covar.shape
-        if g.covariance_type == 'full':
-            N = int(d*(d+1)/2. + d)
-        elif g.covariance_type == 'diag':
-            N = 2*d
-
-        # compute delta BIC
-        n = g.n_samples
-        n1 = self.n_samples
-        n2 = other.n_samples
-
-
-        if n == 0:
-            ldc = 0.
+        if merged is None:
+            # merge self and other
+            g = self.merge(other)
         else:
-            ldc = g.log_det_covar
+            g = merged
 
-        if n1 == 0:
-            ldc1 = 0.
-        else:
-            ldc1 = self.log_det_covar
-
-        if n2 == 0:
-            ldc2 = 0.
-        else:
-            ldc2 = other.log_det_covar
-
-        delta_bic = n*ldc - n1*ldc1 - n2*ldc2 - penalty_coef*N*np.log(n)
+        delta_bic = bayesianInformationCriterion(
+            self, other, g=g, penalty_coef=penalty_coef)
 
         # return delta bic & merged gaussian
         return delta_bic, g
@@ -187,3 +163,126 @@ class Gaussian(object):
         return np.float(
             dmean.dot(np.sqrt(self.inv_covar * g.inv_covar)).dot(dmean.T)
         )
+
+
+class RollingGaussian(Gaussian):
+
+    def __init__(self, covariance_type='full'):
+        super(RollingGaussian, self).__init__(covariance_type=covariance_type)
+        self.mean = None
+        self.covar = None
+        self.n_samples = 0
+        self.start = 0
+        self.end = 0
+
+    def fit(self, X, start=None, end=None):
+
+        if start is None:
+            start = 0
+        if end is None:
+            end = len(X)
+
+        # first call to fit...
+        if self.n_samples == 0:
+            self.start = start
+            self.end = end
+            return super(RollingGaussian, self).fit(X[start:end])
+
+        i_index = range(start, self.start) + range(self.end, end)
+        o_index = range(self.start, start) + range(end, self.end)
+
+        i_x = np.take(X, i_index, axis=0)
+        o_x = np.take(X, o_index, axis=0)
+
+        n_old = self.n_samples
+        n_in = len(i_x)
+        n_out = len(o_x)
+        n_new = n_old + n_in - n_out
+
+        # estimate new mean
+
+        d = X.shape[1]
+
+        mu_old = self.mean
+        mu_in = (np.mean(i_x, axis=0).reshape((1, -1))
+                 if n_in else np.zeros((1, d)))
+        mu_out = (np.mean(o_x, axis=0).reshape((1, -1))
+                  if n_out else np.zeros((1, d)))
+        mu_new = ((n_old * mu_old + n_in * mu_in - n_out * mu_out) /
+                  (n_old + n_in - n_out))
+
+        # estimate new covariance
+
+        cov_old = self.covar
+
+        cov_in = (np.cov(i_x.T, ddof=0)
+                  if n_in else np.zeros((d, d)))
+        cov_out = (np.cov(o_x.T, ddof=0)
+                   if n_out else np.zeros((d, d)))
+
+        cov_new = (
+            (
+                n_old * (cov_old + np.dot(mu_old.T, mu_old))
+                + n_in * (cov_in + np.dot(mu_in.T, mu_in))
+                - n_out * (cov_out + np.dot(mu_out.T, mu_out))
+            ) / (n_old + n_in - n_out) - np.dot(mu_new.T, mu_new)
+        )
+
+        if self.covariance_type == 'diag':
+            cov_new = np.diag(np.diag(cov_new, k=0))
+
+        # remember everything
+
+        self.start = start
+        self.end = end
+        self.n_samples = n_new
+
+        self.mean = mu_new
+        self.covar = cov_new
+
+        return self
+
+
+def bayesianInformationCriterion(g1, g2, g=None, penalty_coef=1.,
+                                 returns_terms=False):
+    """Returns Bayesian Information Criterion from 2 Gaussians
+
+    Parameters
+    ----------
+    g1, g2 : Gaussian
+    penalty_coef: float, optional
+        Defaults to 1.
+    g : Gaussian, optional
+        Precomputed merge of g1 and g2
+    returns_terms : boolean, optional
+        Returns (ratio, penalty) tuple instead of ratio - 𝝀 x penalty
+    """
+
+    # merge gaussians if precomputed version is not provided
+    if g is None:
+        g = g1.merge(g2)
+
+    # number of samples for each gaussian
+    n1 = g1.n_samples
+    n2 = g2.n_samples
+    n = n1 + n2
+
+    # first term of Bayesian information criterion
+    ldc = g.log_det_covar if n > 0 else 0.
+    ldc1 = g1.log_det_covar if n1 > 0 else 0.
+    ldc2 = g2.log_det_covar if n2 > 0 else 0.
+    ratio = n * ldc - n1 * ldc1 - n2 * ldc2
+
+    # second term of Bayesian information criterion
+    d = g.mean.shape[1]  # number of free parameters
+    if g.covariance_type == 'diag':
+        n_parameters = 2 * d
+    else:
+        n_parameters = d + (d * (d + 1)) / 2
+    penalty = n_parameters * np.log(n)
+
+    if returns_terms:
+        return ratio, penalty
+
+    else:
+        return ratio - penalty_coef * penalty

@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS
+# Copyright (c) 2014-2015 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -36,9 +36,85 @@ VITERBI_CONSTRAINT_FORBIDDEN = 1
 VITERBI_CONSTRAINT_MANDATORY = 2
 
 
+LOG_ZERO = np.log(1e-200)
+
+# handling 'consecutive' constraints is achieved by duplicating states
+# the following functions are here to help in this process
+
+
+# create new transition prob. matrix accounting for duplicated states.
+def _update_transition(transition, consecutive):
+
+    # initialize with LOG_ZERO everywhere
+    # except on the +1 diagonal np.log(1)
+    new_n_states = np.sum(consecutive)
+    new_transition = LOG_ZERO * np.ones((new_n_states, new_n_states))
+    for i in range(1, new_n_states):
+        new_transition[i - 1, i] = np.log(1)
+
+    n_states = len(consecutive)
+    boundary = np.hstack(([0], np.cumsum(consecutive)))
+    start = boundary[:-1]
+    end = boundary[1:] - 1
+
+    for i, j in itertools.product(range(n_states), repeat=2):
+        new_transition[end[i], start[j]] = transition[i, j]
+
+    return new_transition
+
+
+# create new initial prob. matrix accounting for duplicated states.
+def _update_initial(initial, consecutive):
+
+    new_n_states = np.sum(consecutive)
+    new_initial = LOG_ZERO * np.ones((new_n_states, ))
+
+    n_states = len(consecutive)
+    boundary = np.hstack(([0], np.cumsum(consecutive)))
+    start = boundary[:-1]
+
+    for i in range(n_states):
+        new_initial[start[i]] = initial[i]
+
+    return new_initial
+
+
+# create new emission prob. matrix accounting for duplicated states.
+def _update_emission(emission, consecutive):
+
+    return np.vstack(
+        np.tile(e, (c, 1))  # duplicate emission probabilities c times
+        for e, c in itertools.izip(emission.T, consecutive)
+    ).T
+
+
+# create new constraint matrix accounting for duplicated states
+def _update_constraint(constraint, consecutive):
+
+    return np.vstack(
+        np.tile(e, (c, 1))  # duplicate constraint probabilities c times
+        for e, c in itertools.izip(constraint.T, consecutive)
+    ).T
+
+
+# convert sequence of duplicated states back to sequence of original states.
+def _update_states(states, consecutive):
+
+    boundary = np.hstack(([0], np.cumsum(consecutive)))
+    start = boundary[:-1]
+    end = boundary[1:]
+
+    new_states = np.empty(states.shape)
+
+    for i, (s, e) in enumerate(itertools.izip(start, end)):
+        new_states[np.where((s <= states) & (states < e))] = i
+
+    return new_states
+
+
 def viterbi_decoding(emission, transition,
                      initial=None, consecutive=None, constraint=None):
-    """Viterbi decoding
+    """(Constrained) Viterbi decoding
 
     Parameters
     ----------
@@ -48,9 +124,10 @@ def viterbi_decoding(emission, transition,
         T[i, j] is the transition log-probabilities from state i to state j.
     initial : optional, array of shape (n_states, )
         I[i] is the initial log-probabilities of state i.
+        Defaults to equal log-probabilities.
     consecutive : optional, int or int array of shape (n_states, )
         C[i] is a the minimum-consecutive-states constraint for state i.
-        C[i] = 1 is equivalent to no constraint.
+        C[i] = 1 is equivalent to no constraint (default).
     constraint : optional, array of shape (n_samples, n_states)
         K[t, i] = 1 forbids state i at time t.
         K[t, i] = 2 forces state i at time t.
@@ -61,73 +138,51 @@ def viterbi_decoding(emission, transition,
     states : array of shape (n_samples, )
         Most probable state sequence
 
-    References
-    ----------
-    Enrique Garcia-Cejaa and Ramon Brenaa. "Long-term Activities Segmentation
-    using Viterbi Algorithm with a k-minimum-consecutive-states Constraint".
-    5th International Conference on Ambient Systems, Networks and Technologies
-
     """
-
-    T, K = emission.shape  # number of observations x number of states
-    states = np.arange(K)  # states 0 to K-1
 
     # ~~ INITIALIZATION ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    # balance initial probabilities when they are not provided
-    if initial is None:
-        initial = np.log(np.ones((K, )) / K)
-
-    # mandatory[t] = k is state k is mandatory at time t
-    # mandatory[t] = -1 means no mandatory state
-    mandatory = -np.ones((T,), dtype=int)
-
-    # must_change_state[t] = 1 if one must change state
-    # between times t-1 and t according to constraints
-    # must_change_state[t] = 0 means there is no need (but it is allowed)
-    must_change_state = np.zeros((T, ), dtype=int)
-
-    # deal with constraints, when they are provided
-    if constraint is not None:
-
-        # make a copy of emission probabilities before modifying them
-        emission = np.array(emission)
-
-        # set emission probability to zero for forbidden states
-        emission[
-            np.where(constraint == VITERBI_CONSTRAINT_FORBIDDEN)] = -np.inf
-
-        # iterate over mandatory states
-        for t, k in itertools.izip(
-            *np.where(constraint == VITERBI_CONSTRAINT_MANDATORY)
-        ):
-            # remember that state k is mandatory at time t
-            mandatory[t] = k
-
-            # set emission probability to zero
-            # for all states but the mandatory one
-            emission[t, states != k] = -np.inf
-
-        # one must change state if it is mandatory at time t-1
-        # and then forbidden at time t
-        must_change_state[
-            np.where(
-                (constraint[:-1, :] == VITERBI_CONSTRAINT_MANDATORY) &
-                (constraint[1:, :] == VITERBI_CONSTRAINT_FORBIDDEN)
-            )[0] + 1
-        ] = 1
+    T, k = emission.shape  # number of observations x number of states
 
     # no minimum-consecutive-states constraints
     if consecutive is None:
-        D = np.ones((K, ), dtype=int)
+        consecutive = np.ones((k, ), dtype=int)
 
     # same value for all states
     elif isinstance(consecutive, int):
-        D = consecutive * np.ones((K, ), dtype=int)
+        consecutive = consecutive * np.ones((k, ), dtype=int)
 
     # (potentially) different values per state
     else:
-        D = np.array(consecutive, dtype=int).reshape((K, ))
+        consecutive = np.array(consecutive, dtype=int).reshape((k, ))
+
+    # balance initial probabilities when they are not provided
+    if initial is None:
+        initial = np.log(np.ones((k, )) / k)
+
+    # no constraint?
+    if constraint is None:
+        constraint = VITERBI_CONSTRAINT_NONE * np.ones((T, k))
+
+    # artificially create new states to account for 'consecutive' constraints
+    emission = _update_emission(emission, consecutive)
+    transition = _update_transition(transition, consecutive)
+    initial = _update_initial(initial, consecutive)
+    constraint = _update_constraint(constraint, consecutive)
+    T, K = emission.shape  # number of observations x number of new states
+    states = np.arange(K)  # states 0 to K-1
+
+    # set emission probability to zero for forbidden states
+    emission[
+        np.where(constraint == VITERBI_CONSTRAINT_FORBIDDEN)] = LOG_ZERO
+
+    # set emission probability to zero for all states but the mandatory one
+    for t, k in itertools.izip(
+        *np.where(constraint == VITERBI_CONSTRAINT_MANDATORY)
+    ):
+        emission[t, states != k] = LOG_ZERO
+
+    # ~~ FORWARD PASS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     V = np.empty((T, K))                # V[t, k] is the probability of the
     V[0, :] = emission[0, :] + initial  # most probable state sequence for the
@@ -138,50 +193,16 @@ def viterbi_decoding(emission, transition,
     P[0, :] = states                 # to get from time t-1 to time t at
                                      # state k
 
-    C = np.empty((T, K), dtype=int)  # C[t, k] = n means that the optimal path
-    C[0, :] = 1                      # leading to state k at time t has already
-                                     # been in state k since time t-n
-
-    # ~~ FORWARD ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     for t in range(1, T):
-
-        # make a copy of transition probabilities before modifying them
-        _transition = np.array(transition)
-
-        # in case there is no state constraint at time t
-        # deal with "consecutive states" constraint
-        if mandatory[t] < 0 and not must_change_state[t]:
-
-            # zero transition probability for paths
-            # that do not match `consecutive` constraint
-            for k in states:
-
-                # not yet long enough in state k?
-                if C[t - 1, k] < D[k]:
-                    # cannot transition from state k to state k' != k
-                    _transition[k, states != k] = -np.inf
 
         # tmp[k, k'] is the probability of the most probable path
         # leading to state k at time t - 1, plus the probability of
         # transitioning from state k to state k' (at time t)
-        tmp = (V[t - 1, :] + _transition.T).T
+        tmp = (V[t - 1, :] + transition.T).T
 
         # optimal path to state k at t comes from state P[t, k] at t - 1
         # (find among all possible states at this time t)
         P[t, :] = np.argmax(tmp, axis=0)
-
-        # update C[t, :]
-        for k in states:
-
-            # optimal path reaching state k at time t
-            # actually came from state k at time t-1
-            if P[t, k] == k:
-                C[t, k] = C[t - 1, k] + 1
-
-            # optimal path reaching state k at time t
-            # actually came from state k' != k at time t-1
-            else:
-                C[t, k] = 1
 
         # update V for time t
         V[t, :] = emission[t, :] + tmp[P[t, :], states]
@@ -192,4 +213,6 @@ def viterbi_decoding(emission, transition,
     for t in range(1, T):
         X[-(t + 1)] = P[-t, X[-t]]
 
-    return X
+    # ~~ CONVERT BACK TO ORIGINAL STATES
+
+    return _update_states(X, consecutive)

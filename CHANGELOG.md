@@ -1,3 +1,8 @@
+### Version 0.3 (2015-01-23)
+
+  - feat: BIC segmentation algorithm
+  - refactor: duration-constrained Viterbi 
+
 ### Version 0.2.1 (2015-01-14)
 
   - fix: missing 'equal_priors' option
