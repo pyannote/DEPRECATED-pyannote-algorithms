@@ -141,40 +141,16 @@ class Gaussian(object):
 
         return g
 
-    def bic(self, other, penalty_coef=3.5):
+    def bic(self, other, penalty_coef=3.5, merged=None):
 
-        # merge self and other
-        g = self.merge(other)
-
-        # number of free parameters
-        d, _ = g.covar.shape
-        if g.covariance_type == 'full':
-            N = int(d*(d+1)/2. + d)
-        elif g.covariance_type == 'diag':
-            N = 2*d
-
-        # compute delta BIC
-        n = g.n_samples
-        n1 = self.n_samples
-        n2 = other.n_samples
-
-
-        if n == 0:
-            ldc = 0.
+        if merged is None:
+            # merge self and other
+            g = self.merge(other)
         else:
-            ldc = g.log_det_covar
+            g = merged
 
-        if n1 == 0:
-            ldc1 = 0.
-        else:
-            ldc1 = self.log_det_covar
-
-        if n2 == 0:
-            ldc2 = 0.
-        else:
-            ldc2 = other.log_det_covar
-
-        delta_bic = n*ldc - n1*ldc1 - n2*ldc2 - penalty_coef*N*np.log(n)
+        delta_bic = bayesianInformationCriterion(
+            self, other, g=g, penalty_coef=penalty_coef)
 
         # return delta bic & merged gaussian
         return delta_bic, g
