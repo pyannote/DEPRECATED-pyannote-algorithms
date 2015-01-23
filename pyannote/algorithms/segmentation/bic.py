@@ -132,11 +132,12 @@ class BICSegmentation(SKLearnBICSegmentation):
             min_samples=min_samples,
             precision=precision)
 
+        result = Timeline()
+
         for long_segment in segmentation:
 
             X = features.crop(long_segment)
             boundaries = segmenter.apply(X)
-            result = Timeline()
             for t, T in pairwise(boundaries):
                 segment = sliding_window.rangeToSegment(t, T - t)
                 shifted_segment = Segment(long_segment.start + segment.start,

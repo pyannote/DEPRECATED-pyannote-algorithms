@@ -1,4 +1,4 @@
-### Version 0.3 (2015-01-23)
+### Version 0.3.1 (2015-01-23)
 
   - feat: BIC segmentation algorithm
   - refactor: duration-constrained Viterbi 
