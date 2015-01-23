@@ -30,7 +30,7 @@ from __future__ import unicode_literals
 from ..stats.gaussian import RollingGaussian, bayesianInformationCriterion
 import numpy as np
 from pyannote.core.util import pairwise
-from pyannote.core import Timeline
+from pyannote.core import Timeline, Segment
 
 
 class SKLearnBICSegmentation(object):
@@ -111,9 +111,16 @@ class BICSegmentation(SKLearnBICSegmentation):
         self.min_duration = min_duration
         self.precision = precision
 
-    def apply(self, features):
+    def apply(self, features, segmentation=None):
+        """
+        Parameters
+        ----------
+        features : Features
+        segmentation : Timeline, optional
+        """
 
-        X = features.data
+        if segmentation is None:
+            segmentation = Timeline(segments=[features.getExtent()])
 
         sliding_window = features.sliding_window
         min_samples = sliding_window.durationToSamples(self.min_duration)
@@ -125,10 +132,15 @@ class BICSegmentation(SKLearnBICSegmentation):
             min_samples=min_samples,
             precision=precision)
 
-        boundaries = segmenter.apply(X)
-        segmentation = Timeline()
-        for t, T in pairwise(boundaries):
-            segment = sliding_window.rangeToSegment(t, T - t)
-            segmentation.add(segment)
+        for long_segment in segmentation:
 
-        return segmentation
+            X = features.crop(long_segment)
+            boundaries = segmenter.apply(X)
+            result = Timeline()
+            for t, T in pairwise(boundaries):
+                segment = sliding_window.rangeToSegment(t, T - t)
+                shifted_segment = Segment(long_segment.start + segment.start,
+                                          long_segment.start + segment.end)
+                result.add(shifted_segment)
+
+        return result
