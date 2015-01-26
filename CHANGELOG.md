@@ -1,3 +1,7 @@
+### Version 0.3.2 (2015-01-26)
+
+  - fix: GMMClassification supports Timeline input
+
 ### Version 0.3.1 (2015-01-23)
 
   - feat: BIC segmentation algorithm

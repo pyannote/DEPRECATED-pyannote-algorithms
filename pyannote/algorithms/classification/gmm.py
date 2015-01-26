@@ -29,7 +29,7 @@ import numpy as np
 from ..stats.llr import logsumexp
 from ..stats.lbg import LBG
 from ..stats.llr import LLRNaiveBayes, LLRIsotonicRegression, LLRPassthrough
-from pyannote.core import Scores
+from pyannote.core import Timeline, Annotation, Scores
 
 import sklearn
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -602,6 +602,12 @@ class GMMClassification(SKLearnMixin):
         return self
 
     def _as_scores(self, raw, features, segmentation):
+
+        if isinstance(segmentation, Timeline):
+            annotation = Annotation(uri=segmentation.uri)
+            for segment in segmentation:
+                annotation[segment] = '?'
+            segmentation = annotation
 
         # convert to pyannote-style & aggregate over each segment
         scores = Scores(uri=segmentation.uri, modality=segmentation.modality,
