@@ -177,6 +177,15 @@ class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
         return data
 
 
+def posterior(llr, prior=None):
+
+    if prior is None:
+        prior = 0.5
+
+    priorRatio = (1. - prior) / prior
+
+    return 1 / (1 + priorRatio * np.exp(-llr))
+
 
 def logsumexp(a, b=None, axis=0):
     """{Over|under}flow-robust computation of log(sum(b*exp(a)))
