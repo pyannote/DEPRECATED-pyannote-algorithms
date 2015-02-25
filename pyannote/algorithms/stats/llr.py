@@ -65,15 +65,22 @@ class LLRNaiveBayes(GaussianNB):
 
 class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
 
-    def __init__(self, equal_priors=False, y_min=1e-4, y_max=1. - 1e-4):
+    def __init__(self, equal_priors=False, y_min=1e-4, y_max=1. - 1e-4,
+                 plottable=False):
         super(LLRIsotonicRegression, self).__init__()
         self.equal_priors = equal_priors
         self.y_min = y_min
         self.y_max = y_max
+        self.plottable = plottable
 
     def fit(self, X, y):
 
         X, y = keepZeroOrOne(X, y, reshape=(-1, ))
+
+        if self.plottable:
+            self.X_ = X
+            self.y_ = y
+
         if self.equal_priors:
 
             positive = X[y == 1]
@@ -126,6 +133,49 @@ class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
         p = self.regression_.transform(X.reshape((-1, )))
         p = p.reshape(shape)
         return np.log(p) - np.log(1. - p)
+
+    def _repr_png_(self):
+
+        from pyannote.core.notebook import plt, _render
+
+        # remember current figure size
+        figsize = plt.rcParams['figure.figsize']
+        # and update it for segment display
+        plt.rcParams['figure.figsize'] = (5, 10)
+
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+
+        _, bins = np.histogram(self.X_, bins=100)
+
+        mu, sigma = np.mean(self.X_), np.std(self.X_)
+        m = mu - 3 * sigma
+        M = mu + 3 * sigma
+
+        # m, M = np.min(self.X_), np.max(self.X_)
+
+        positive = self.X_[self.y_ == 1]
+        negative = self.X_[self.y_ == 0]
+        ax1.hist(positive, bins=bins, alpha=0.5, color='g', normed=True)
+        ax1.hist(negative, bins=bins, alpha=0.5, color='r', normed=True)
+        ax1.set_xlim(m, M)
+
+        t = np.linspace(m, M, 50)
+        ax2.plot(t, self.transform(t))
+        ax2.plot([m, M], [0, 0], 'k--')
+        ax2.set_xlim(m, M)
+
+        ax3.plot(t, posterior(self.transform(t)))
+        ax3.plot([m, M], [0.5, 0.5], 'k--')
+        ax3.set_xlim(m, M)
+        ax3.set_ylim(-0.1, 1.1)
+
+        data = _render(fig)
+
+        # go back to previous figure size
+        plt.rcParams['figure.figsize'] = figsize
+
+        return data
+
 
 
 def logsumexp(a, b=None, axis=0):
