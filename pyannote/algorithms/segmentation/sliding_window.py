@@ -74,7 +74,7 @@ class SlidingWindowsSegmentation(object):
     def diff(self, left, right, feature):
         raise NotImplementedError()
 
-    def iterdiff(self, feature):
+    def iterdiff(self, feature, focus):
         """(middle, difference) generator
 
         `middle`
@@ -86,8 +86,6 @@ class SlidingWindowsSegmentation(object):
         feature : SlidingWindowFeature
             Pre-extracted features
         """
-
-        focus = feature.getExtent()
 
         sliding_window = SlidingWindow(
             duration=self.duration,
@@ -104,38 +102,45 @@ class SlidingWindowsSegmentation(object):
 
             yield middle, self.diff(left, right, feature)
 
-    def apply(self, feature):
+    def apply(self, feature, segmentation=None):
 
-        x, y = zip(*[
-            (m, d) for m, d in self.iterdiff(feature)
-        ])
-        x = np.array(x)
-        y = np.array(y)
+        if segmentation is None:
+            focus = feature.getExtent()
+            segmentation = Timeline(segments=[focus], uri=None)
 
-        # find local maxima
-        order = 1
-        if self.min_duration > 0:
-            order = int(self.min_duration / self.step)
-        maxima = scipy.signal.argrelmax(y, order=order)
+        result = Timeline()
+        for focus in segmentation:
 
-        x = x[maxima]
-        y = y[maxima]
+            x, y = zip(*[
+                (m, d) for m, d in self.iterdiff(feature, focus)
+            ])
+            x = np.array(x)
+            y = np.array(y)
 
-        # only keep high enough local maxima
-        high_maxima = np.where(y > self.threshold)
+            # find local maxima
+            order = 1
+            if self.min_duration > 0:
+                order = int(self.min_duration / self.step)
+            maxima = scipy.signal.argrelmax(y, order=order)
 
-        # create list of segment boundaries
-        # do not forget very first and last boundaries
-        extent = feature.getExtent()
-        boundaries = itertools.chain(
-            [extent.start], x[high_maxima], [extent.end]
-        )
+            x = x[maxima]
+            y = y[maxima]
 
-        # create list of segments from boundaries
-        segments = [Segment(*p) for p in pairwise(boundaries)]
+            # only keep high enough local maxima
+            high_maxima = np.where(y > self.threshold)
 
-        # TODO: find a way to set 'uri'
-        return Timeline(segments=segments, uri=None)
+            # create list of segment boundaries
+            # do not forget very first and last boundaries
+            boundaries = itertools.chain(
+                [focus.start], x[high_maxima], [focus.end]
+            )
+
+            # create list of segments from boundaries
+            segments = [Segment(*p) for p in pairwise(boundaries)]
+
+            result.update(Timeline(segments=segments))
+
+        return result
 
 
 class GaussianDivergenceMixin:

@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014-2015 CNRS
+# Copyright (c) 2015 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,3 +25,22 @@
 
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
+
+
+from __future__ import unicode_literals
+
+import numpy as np
+
+
+def keepZeroOrOne(X, y, reshape=None):
+    assert y.shape == X.shape
+    keep = ((y == 0) | (y == 1)) & np.isfinite(X)
+
+    X = X[keep]
+    y = y[keep]
+
+    if reshape:
+        X = X.reshape(reshape)
+        y = y.reshape(reshape)
+
+    return X, y

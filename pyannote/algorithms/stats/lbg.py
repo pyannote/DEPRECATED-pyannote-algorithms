@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2012-2015 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -23,15 +23,19 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 from __future__ import unicode_literals
 
 
 """Linde–Buzo–Gray algorithm"""
 
 
-import logging
 import numpy as np
+import itertools
 from sklearn.mixture import GMM
+import logging
 
 
 class LBG(object):
@@ -62,7 +66,7 @@ class LBG(object):
 
     sampling : int, optional
         Reduce the number of samples used for the initialization steps to
-        `sampling` samples per component. A few hundreds samples per component
+        `sampling` samples per component. A few thousands samples per component
         should be a reasonable rule of thumb.
         The final estimation steps always use the whole sample set.
 
@@ -94,8 +98,8 @@ class LBG(object):
     """
 
     def __init__(self, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=10, disturb=0.05, sampling=0):
+                 random_state=None, thresh=1e-5, min_covar=1e-3,
+                 n_iter=10, disturb=0.05, sampling=0, logger=None):
 
         if covariance_type != 'diag':
             raise NotImplementedError(
@@ -111,31 +115,24 @@ class LBG(object):
         self.n_iter = n_iter
         self.disturb = disturb
         self.sampling = sampling
+        self.logger = logging.getLogger(__name__) if logger is None else logger
 
-    def _subsample(self, X, n_components):
-        """Down-sample data points according to current number of components
+    def sample(self, X, n):
+        # shuffle-sampling
 
-        Successive calls will return different sample sets, based on the
-        internal _counter which is incremented after each call.
+        N = X.shape[0]
 
-        Parameters
-        ----------
-        X : array_like, shape (N, n_features)
-            List of n_features-dimensional data points.  Each row
-            corresponds to a single data point.
+        # keep going
+        while True:
 
-        Returns
-        -------
-        x : array_like, shape (n < N, n_features)
-            Subset of X, with n close to n_components x sampling
-        """
+            if n == 0 or N <= n:
+                yield X
+                continue
 
-        x = X
-        step = len(X) / (self.sampling * n_components)
-        if step >= 2:
-            x = X[(self._counter % step)::step]
-            self._counter += 1
-        return x
+            # start by shuffling X
+            X = np.random.permutation(X)
+            for i in xrange(0, N - n, n):
+                yield X[i:i + n, :]
 
     def _split(self, gmm, n_components):
         """Split gaussians and return new mixture.
@@ -160,7 +157,6 @@ class LBG(object):
         new_gmm = GMM(n_components=n_components,
                       covariance_type=self.covariance_type,
                       random_state=self.random_state,
-                      thresh=self.thresh,
                       min_covar=self.min_covar,
                       n_iter=1,
                       params='wmc',
@@ -172,7 +168,7 @@ class LBG(object):
 
         # split weights
         new_gmm.weights_[:k] = gmm.weights_[:k] / 2
-        new_gmm.weights_[k:2*k] = gmm.weights_[:k] / 2
+        new_gmm.weights_[k:2 * k] = gmm.weights_[:k] / 2
 
         # initialize means_ with new number of components
         shape = list(gmm.means_.shape)
@@ -182,7 +178,7 @@ class LBG(object):
         # TODO: for now it only supports 'diag'
         noise = self.disturb * np.sqrt(gmm.covars_[:k, :])
         new_gmm.means_[:k, :] = gmm.means_[:k, :] + noise
-        new_gmm.means_[k:2*k, :] = gmm.means_[:k, :] - noise
+        new_gmm.means_[k:2 * k, :] = gmm.means_[:k, :] - noise
 
         # initialize covars_ with new number of components
         shape = list(gmm.covars_.shape)
@@ -191,15 +187,93 @@ class LBG(object):
         # TODO: add support for other covariance_type
         # TODO: for now it only supports 'diag'
         new_gmm.covars_[:k, :] = gmm.covars_[:k, :]
-        new_gmm.covars_[k:2*k, :] = gmm.covars_[:k, :]
+        new_gmm.covars_[k:2 * k, :] = gmm.covars_[:k, :]
 
         # copy remaining unsplit gaussians
         if k < gmm.n_components:
-            new_gmm.weights_[2*k:] = gmm.weights_[k:]
-            new_gmm.means_[2*k:, :] = gmm.means_[k:, :]
-            new_gmm.covars_[2*k:, :] = gmm.covars_[k:, :]
+            new_gmm.weights_[2 * k:] = gmm.weights_[k:]
+            new_gmm.means_[2 * k:, :] = gmm.means_[k:, :]
+            new_gmm.covars_[2 * k:, :] = gmm.covars_[k:, :]
 
         return new_gmm
+
+    def apply_partial(self, X, gmm=None):
+
+        # initialize GMM with only one gaussian if None is provided
+        if gmm is None:
+            gmm = GMM(n_components=1, covariance_type=self.covariance_type,
+                      random_state=self.random_state,
+                      min_covar=self.min_covar, n_iter=1,
+                      n_init=1, params='wmc',
+                      init_params='')
+
+        previous_ll = -np.inf
+
+        log_splt = "{0} gauss."
+        log_iter = (
+            "{0} gauss. / iter. #{1} / {2} samples / "
+            "llr = {3:.5f} (gain = {4:.5f})"
+        )
+
+        while gmm.n_components <= self.n_components:
+
+            self.logger.info(log_splt.format(gmm.n_components))
+
+            # number of samples
+            n = self.sampling * gmm.n_components
+
+            # set n to 0 if this is the last iteration
+            # so that complete model is trained with all data
+            n *= (gmm.n_components < self.n_components)
+
+            # iterate n_iter times (potentially with sampled data)
+            for i, x in itertools.izip(xrange(self.n_iter), self.sample(X, n)):
+
+                # one EM iteration
+                gmm.fit(x)
+
+                # compute average log-likelihood gain
+                ll = np.mean(gmm.score(X))
+                gain = ll - previous_ll
+
+                yield gmm, {'n_components': gmm.n_components,
+                            'iteration': i + 1,
+                            'log_likelihood': ll}
+
+                # log
+                self.logger.debug(log_iter.format(
+                    gmm.n_components, i + 1, x.shape[0], ll, gain))
+
+                # converged?
+                if (i > 0) and abs(gain) < self.thresh:
+                    break
+
+                previous_ll = ll
+
+            if gmm.n_components < self.n_components:
+
+                # one EM iteration
+                gmm.fit(X)
+
+                # compute average log-likelihood gain
+                ll = np.mean(gmm.score(X))
+                gain = ll - previous_ll
+
+                yield gmm, {'n_components': gmm.n_components,
+                            'iteration': -1,
+                            'log_likelihood': ll}
+
+                # log
+                self.logger.debug(log_iter.format(
+                    gmm.n_components, i + 2, X.shape[0], ll, gain))
+
+            else:
+                # stop iterating when requested number of components is reached
+                return
+
+            # increase number of components (x 2)
+            n_components = min(self.n_components, 2 * gmm.n_components)
+            gmm = self._split(gmm, n_components)
 
     def apply(self, X):
         """Estimate model parameters with LBG initialization and
@@ -212,60 +286,7 @@ class LBG(object):
             corresponds to a single data point.
         """
 
-        self._counter = 0
-
-        # init with one gaussian
-        gmm = GMM(n_components=1, covariance_type=self.covariance_type,
-                  random_state=self.random_state, thresh=self.thresh,
-                  min_covar=self.min_covar, n_iter=1,
-                  n_init=1, params='wmc',
-                  init_params='')
-
-        _llr = -np.inf
-        while gmm.n_components < self.n_components:
-
-            # fit GMM on a rolling subset of training data
-            if self.sampling > 0:
-
-                for i in range(self.n_iter):
-
-                    x = self._subsample(X, gmm.n_components)
-                    gmm.fit(x)
-
-                    # --- logging ---------------------------------------------
-                    llr = np.mean(gmm.score(X))
-                    logging.debug(
-                        "%d Gaussians %d frames iter %d llr = %f gain %f" %
-                        (gmm.n_components, len(x), i+1, llr, llr-_llr))
-                    _llr = llr
-                    # ---------------------------------------------------------
-
-            else:
-
-                gmm.n_iter = self.n_iter
-                gmm.fit(X)
-
-                # --- logging -------------------------------------------------
-                llr = np.mean(gmm.score(X))
-                logging.debug(
-                    "%d Gaussians %d frames llr = %f gain %f" %
-                    (gmm.n_components, len(X), llr, llr-_llr))
-                _llr = llr
-                # -------------------------------------------------------------
-
-            # increase number of components (x 2)
-            n_components = min(self.n_components, 2*gmm.n_components)
-            gmm = self._split(gmm, n_components)
-
-        gmm.n_iter = self.n_iter
-        gmm.fit(X)
-
-        # --- logging ---------------------------------------------------------
-        llr = np.mean(gmm.score(X))
-        logging.debug(
-            "%d Gaussians %d frames llr = %f gain %f" %
-            (gmm.n_components, len(X), llr, llr-_llr))
-        _llr = llr
-        # ---------------------------------------------------------------------
+        for gmm, _ in self.apply_partial(X):
+            pass
 
         return gmm

@@ -345,7 +345,7 @@ class GMMSegmentation(SKLearnMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  calibration=None, lbg=False, equal_priors=False):
 
         self.n_components = n_components
@@ -550,7 +550,7 @@ class GMMUBMSegmentation(SKLearnMixin):
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
                  random_state=None, thresh=1e-2, min_covar=1e-3,
-                 n_iter=100, n_init=1, params='wmc', init_params='wmc',
+                 n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
                  calibration=None, lbg=False):
 
