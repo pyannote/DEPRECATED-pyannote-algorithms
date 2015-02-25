@@ -1,3 +1,9 @@
+### Version 0.4.0 (2015-02-25)
+
+ - feat(segmentation): add support for input segmentation
+ - improve(LBG): GMM iterator + better default parameters
+ - feat: LLRIsotonicRegression IPython display
+
 ### Version 0.3.2 (2015-01-26)
 
   - fix: GMMClassification supports Timeline input
