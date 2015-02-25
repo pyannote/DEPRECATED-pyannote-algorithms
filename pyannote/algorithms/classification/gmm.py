@@ -40,12 +40,12 @@ from joblib import Parallel, delayed
 
 
 def fit_gmm_lbg(X, n_components=1, covariance_type='diag',
-                random_state=None, thresh=1e-2, min_covar=1e-3,
+                random_state=None, thresh=1e-5, min_covar=1e-3,
                 n_iter=10, **kwargs):
 
     lbg = LBG(n_components=n_components, covariance_type=covariance_type,
               random_state=random_state, thresh=thresh, min_covar=min_covar,
-              n_iter=n_iter, disturb=0.05, sampling=500)
+              n_iter=n_iter, disturb=0.05, sampling=10000)
 
     gmm = lbg.apply(X)
 
