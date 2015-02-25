@@ -65,7 +65,7 @@ class LBG(object):
 
     sampling : int, optional
         Reduce the number of samples used for the initialization steps to
-        `sampling` samples per component. A few hundreds samples per component
+        `sampling` samples per component. A few thousands samples per component
         should be a reasonable rule of thumb.
         The final estimation steps always use the whole sample set.
 
@@ -175,7 +175,7 @@ class LBG(object):
 
         # split weights
         new_gmm.weights_[:k] = gmm.weights_[:k] / 2
-        new_gmm.weights_[k:2*k] = gmm.weights_[:k] / 2
+        new_gmm.weights_[k:2 * k] = gmm.weights_[:k] / 2
 
         # initialize means_ with new number of components
         shape = list(gmm.means_.shape)
@@ -185,7 +185,7 @@ class LBG(object):
         # TODO: for now it only supports 'diag'
         noise = self.disturb * np.sqrt(gmm.covars_[:k, :])
         new_gmm.means_[:k, :] = gmm.means_[:k, :] + noise
-        new_gmm.means_[k:2*k, :] = gmm.means_[:k, :] - noise
+        new_gmm.means_[k:2 * k, :] = gmm.means_[:k, :] - noise
 
         # initialize covars_ with new number of components
         shape = list(gmm.covars_.shape)
@@ -194,13 +194,13 @@ class LBG(object):
         # TODO: add support for other covariance_type
         # TODO: for now it only supports 'diag'
         new_gmm.covars_[:k, :] = gmm.covars_[:k, :]
-        new_gmm.covars_[k:2*k, :] = gmm.covars_[:k, :]
+        new_gmm.covars_[k:2 * k, :] = gmm.covars_[:k, :]
 
         # copy remaining unsplit gaussians
         if k < gmm.n_components:
-            new_gmm.weights_[2*k:] = gmm.weights_[k:]
-            new_gmm.means_[2*k:, :] = gmm.means_[k:, :]
-            new_gmm.covars_[2*k:, :] = gmm.covars_[k:, :]
+            new_gmm.weights_[2 * k:] = gmm.weights_[k:]
+            new_gmm.means_[2 * k:, :] = gmm.means_[k:, :]
+            new_gmm.covars_[2 * k:, :] = gmm.covars_[k:, :]
 
         return new_gmm
 
@@ -257,7 +257,7 @@ class LBG(object):
                 # -------------------------------------------------------------
 
             # increase number of components (x 2)
-            n_components = min(self.n_components, 2*gmm.n_components)
+            n_components = min(self.n_components, 2 * gmm.n_components)
             gmm = self._split(gmm, n_components)
 
         gmm.n_iter = self.n_iter
