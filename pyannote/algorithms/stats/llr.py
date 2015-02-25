@@ -29,6 +29,7 @@ import numpy as np
 from sklearn.isotonic import IsotonicRegression
 from sklearn.naive_bayes import GaussianNB
 from sklearn.base import BaseEstimator, TransformerMixin
+from ..utils.Xy import keepZeroOrOne
 
 
 class LLRPassthrough(BaseEstimator, TransformerMixin):
@@ -47,10 +48,13 @@ class LLRNaiveBayes(GaussianNB):
         self.equal_priors = equal_priors
 
     def fit(self, X, y):
-        X = X.reshape((-1, 1))
+
+        X, y = keepZeroOrOne(X, y, reshape=((-1, 1)))
         super(LLRNaiveBayes, self).fit(X, y)
+
         if self.equal_priors:
             self.class_prior_[:] = 1. / len(self.class_prior_)
+
         return self
 
     def transform(self, X):
@@ -69,6 +73,7 @@ class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y):
 
+        X, y = keepZeroOrOne(X, y, reshape=(-1, ))
         if self.equal_priors:
 
             positive = X[y == 1]
@@ -117,7 +122,9 @@ class LLRIsotonicRegression(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        p = self.regression_.transform(X)
+        shape = X.shape
+        p = self.regression_.transform(X.reshape((-1, )))
+        p = p.reshape(shape)
         return np.log(p) - np.log(1. - p)
 
 
