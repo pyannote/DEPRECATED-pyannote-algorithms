@@ -156,6 +156,9 @@ def viterbi_decoding(emission, transition,
     else:
         consecutive = np.array(consecutive, dtype=int).reshape((k, ))
 
+    # at least one sample
+    consecutive = np.maximum(1, consecutive)
+
     # balance initial probabilities when they are not provided
     if initial is None:
         initial = np.log(np.ones((k, )) / k)
