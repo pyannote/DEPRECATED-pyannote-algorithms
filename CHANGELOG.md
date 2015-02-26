@@ -1,3 +1,7 @@
+### Version 0.4.1 (2015-02-26)
+
+  - fix: corner case in Viterbi consecutive constraint
+
 ### Version 0.4.0 (2015-02-25)
 
  - feat(segmentation): add support for input segmentation
