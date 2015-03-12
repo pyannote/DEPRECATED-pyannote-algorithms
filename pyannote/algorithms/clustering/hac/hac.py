@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+met(self, clusters, annotation=None, models=None, matrix=None, history=None, feature=None)#!/usr/bin/env python
 # encoding: utf-8
 
 # The MIT License (MIT)
@@ -101,9 +101,9 @@ class HierarchicalAgglomerativeClustering(object):
             self.matrix[c, c] = -np.inf
 
         # TODO: initialize constraints
-        # self.hacConstraint.initialize(
-        #     annotation=self.annotation, models=self.models,
-        #     matrix=self.matrix, history=self.history, feature=feature)
+        self.hacConstraint.initialize(
+            annotation=self.annotation, models=self.models,
+            matrix=self.matrix, history=self.history, feature=feature)
 
         # initialize stopping criterion
         self.hacStop.initialize(
@@ -142,9 +142,11 @@ class HierarchicalAgglomerativeClustering(object):
 
                 # TODO: constrained clustering
                 # if mergeable(cluster1, cluster2)
-                #     break
-                # self.matrix[cluster1, cluster2] = -np.inf
-                # self.matrix[cluster2, cluster1] = -np.inf
+                if self.hacConstraint.met([cluster1, cluster2], annotation=self.annotation, models=self.models, 
+                       matrix=self.matrix, history=self.history, feature=self.feature)
+                    break
+                self.matrix[cluster1, cluster2] = -np.inf
+                self.matrix[cluster2, cluster1] = -np.inf
                 # if self.debug:
                 #     msg = "DEBUG > Constraints prevented merging of %s and %s.\n"
                 #     sys.stderr.write(msg % (cluster1, cluster2))
@@ -205,6 +207,8 @@ class HierarchicalAgglomerativeClustering(object):
 
             # TODO:
             # == update constraints
+            self.hacConstraint.update(cluster1, cluster2], new_cluster, annotation=self.annotation, 
+                   models=self.models, matrix=self.matrix, history=self.history, feature=self.feature):
 
             #  == update stopping criterion
             # (most of the time, this does nothing)
