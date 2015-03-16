@@ -775,30 +775,6 @@ class GMMUBMClassification(SKLearnMixin):
 
         return self
 
-    def predict_proba(self, features, segmentation):
-
-        # posterior probabilities sklearn-style
-        X = self.X(features, unknown='keep')
-        posterior = self.classifier_.predict_proba(X)
-
-        # convert to pyannote-style & aggregate over each segment
-        scores = Scores(uri=segmentation.uri, modality=segmentation.modality,
-                        annotation=segmentation,
-                        labels=list(self.label_converter_))
-
-        sliding_window = features.sliding_window
-
-        for segment, track in segmentation.itertracks():
-
-            # extract posterior for all features in segment and aggregate
-            i_start, i_duration = sliding_window.segmentToRange(segment)
-            p = np.mean(posterior[i_start:i_start + i_duration, :], axis=0)
-
-            for i, label in enumerate(self.label_converter_):
-                scores[segment, track, label] = p[i]
-
-        return scores
-
     def predict(self, features, segmentation):
 
         scores = self.predict_proba(features, segmentation)
