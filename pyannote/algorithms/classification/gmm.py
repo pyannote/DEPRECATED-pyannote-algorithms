@@ -496,7 +496,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
         return scores
 
 
-class GMMClassification(SKLearnMixin):
+class GMMClassification(SKLearnMixin, object):
     """
 
     Parameters
