@@ -651,7 +651,7 @@ class GMMClassification(SKLearnMixin):
         return scores.to_annotation(posterior=True)
 
 
-class GMMUBMClassification(SKLearnMixin):
+class GMMUBMClassification(GMMClassification):
     """
     Parameters
     ----------
@@ -721,24 +721,24 @@ class GMMUBMClassification(SKLearnMixin):
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
                  calibration=None, lbg=False, equal_priors=False):
 
-        self.n_components = n_components
-        self.covariance_type = covariance_type
-        self.random_state = random_state
-        self.thresh = thresh
-        self.min_covar = min_covar
-        self.n_iter = n_iter
-        self.n_init = n_init
-        self.params = params
-        self.init_params = init_params
+        super(GMMUBMClassification, self).__init__(
+            n_components=n_components,
+            covariance_type=covariance_type,
+            random_state=random_state,
+            thresh=thresh,
+            min_covar=min_covar,
+            n_iter=n_iter,
+            n_init=n_init,
+            params=params,
+            init_params=init_params,
+            calibration=calibration,
+            n_jobs=n_jobs,
+            lbg=lbg,
+            equal_priors=equal_priors)
 
         self.precomputed_ubm = precomputed_ubm
         self.adapt_iter = adapt_iter
         self.adapt_params = adapt_params
-
-        self.n_jobs = n_jobs
-        self.calibration = calibration
-        self.lbg = lbg
-        self.equal_priors = equal_priors
 
     def fit(self, features_iter, annotation_iter):
 
