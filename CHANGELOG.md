@@ -1,3 +1,8 @@
+### Version 0.4.2 (2015-03-16)
+
+  - fix: inherit GMMUBMClassification.predict_proba
+  - setup: 
+
 ### Version 0.4.1 (2015-02-26)
 
   - fix: corner case in Viterbi consecutive constraint
