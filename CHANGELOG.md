@@ -1,4 +1,4 @@
-### Version 0.4.3 (2015-03-16)
+### Version 0.4.4 (2015-03-16)
 
   - fix: inherit GMMUBMClassification.predict_proba
   - setup: 
