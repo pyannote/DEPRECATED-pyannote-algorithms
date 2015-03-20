@@ -1,6 +1,6 @@
-### Version 0.4.5 (2015-03-20)
+### Version 0.4.6 (2015-03-20)
 
-  - feat: new method GMM(UBM)Classification.score
+  - feat: new methods add to GMMClassification (score and LLR)
 
 ### Version 0.4.4 (2015-03-16)
 
