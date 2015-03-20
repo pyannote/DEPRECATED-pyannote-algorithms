@@ -627,6 +627,11 @@ class GMMClassification(SKLearnMixin, object):
 
         return scores
 
+    def score(self, features, segmentation):
+        X = self.X(features, unknown='keep')
+        raw = self.classifier_._uncalibrated_scores(X)
+        return self._as_scores(raw, features, segmentation)
+
     def predict_log_likelihood(self, features, segmentation):
         X = self.X(features, unknown='keep')
         log_likelihood = self.classifier_.predict_log_likelihood(X)

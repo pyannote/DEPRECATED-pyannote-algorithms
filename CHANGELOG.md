@@ -1,3 +1,7 @@
+### Version 0.4.5 (2015-03-20)
+
+  - feat: new method GMM(UBM)Classification.score
+
 ### Version 0.4.4 (2015-03-16)
 
   - fix: inherit GMMUBMClassification.predict_proba
