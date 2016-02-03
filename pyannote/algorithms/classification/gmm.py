@@ -40,11 +40,11 @@ from joblib import Parallel, delayed
 
 
 def fit_gmm_lbg(X, n_components=1, covariance_type='diag',
-                random_state=None, thresh=1e-5, min_covar=1e-3,
+                random_state=None, tol=1e-5, min_covar=1e-3,
                 n_iter=10, **kwargs):
 
     lbg = LBG(n_components=n_components, covariance_type=covariance_type,
-              random_state=random_state, thresh=thresh, min_covar=min_covar,
+              random_state=random_state, tol=tol, min_covar=min_covar,
               n_iter=n_iter, disturb=0.05, sampling=10000)
 
     gmm = lbg.apply(X)
@@ -53,14 +53,14 @@ def fit_gmm_lbg(X, n_components=1, covariance_type='diag',
 
 
 def fit_gmm(X, n_components=1, covariance_type='diag',
-            random_state=None, thresh=1e-2, min_covar=1e-3,
+            random_state=None, tol=1e-2, min_covar=1e-3,
             n_iter=10, n_init=1, params='wmc', init_params='wmc'):
 
     gmm = GMM(
         n_components=n_components,
         covariance_type=covariance_type,
         random_state=random_state,
-        thresh=thresh,
+        tol=tol,
         min_covar=min_covar,
         n_iter=n_iter,
         n_init=n_init,
@@ -123,7 +123,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -156,7 +156,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 random_state=None, tol=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  calibration=None, lbg=False, equal_priors=False):
 
@@ -165,7 +165,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.random_state = random_state
-        self.thresh = thresh
+        self.tol = tol
         self.min_covar = min_covar
         self.n_iter = n_iter
         self.n_init = n_init
@@ -210,7 +210,7 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init,
@@ -362,7 +362,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -406,14 +406,14 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 random_state=None, tol=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
                  calibration=None, lbg=False, equal_priors=False):
 
         super(SKLearnGMMUBMClassification, self).__init__(
             n_components=n_components, covariance_type=covariance_type,
-            random_state=random_state, thresh=thresh, min_covar=min_covar,
+            random_state=random_state, tol=tol, min_covar=min_covar,
             n_iter=n_iter, n_init=n_init, params=params,
             init_params=init_params, calibration=calibration, n_jobs=n_jobs,
             lbg=lbg, equal_priors=equal_priors)
@@ -429,7 +429,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init)
@@ -442,7 +442,7 @@ class SKLearnGMMUBMClassification(SKLearnGMMClassification):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init,
@@ -517,7 +517,7 @@ class GMMClassification(SKLearnMixin, object):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -551,14 +551,14 @@ class GMMClassification(SKLearnMixin, object):
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 random_state=None, tol=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  calibration=None, lbg=False, equal_priors=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.random_state = random_state
-        self.thresh = thresh
+        self.tol = tol
         self.min_covar = min_covar
         self.n_iter = n_iter
         self.n_init = n_init
@@ -576,7 +576,7 @@ class GMMClassification(SKLearnMixin, object):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init,
@@ -681,7 +681,7 @@ class GMMUBMClassification(GMMClassification):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -726,7 +726,7 @@ class GMMUBMClassification(GMMClassification):
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 random_state=None, tol=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
                  calibration=None, lbg=False, equal_priors=False):
@@ -735,7 +735,7 @@ class GMMUBMClassification(GMMClassification):
             n_components=n_components,
             covariance_type=covariance_type,
             random_state=random_state,
-            thresh=thresh,
+            tol=tol,
             min_covar=min_covar,
             n_iter=n_iter,
             n_init=n_init,
@@ -757,7 +757,7 @@ class GMMUBMClassification(GMMClassification):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init,

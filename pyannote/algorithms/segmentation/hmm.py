@@ -58,7 +58,7 @@ class SKLearnGMMSegmentation(SKLearnGMMClassification):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -173,7 +173,7 @@ class SKLearnGMMUBMSegmentation(SKLearnGMMUBMClassification):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -311,7 +311,7 @@ class GMMSegmentation(SKLearnMixin):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -344,14 +344,14 @@ class GMMSegmentation(SKLearnMixin):
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 random_state=None, tol=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  calibration=None, lbg=False, equal_priors=False):
 
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.random_state = random_state
-        self.thresh = thresh
+        self.tol = tol
         self.min_covar = min_covar
         self.n_iter = n_iter
         self.n_init = n_init
@@ -369,7 +369,7 @@ class GMMSegmentation(SKLearnMixin):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init,
@@ -508,7 +508,7 @@ class GMMUBMSegmentation(SKLearnMixin):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold.
 
     n_iter : int, optional
@@ -549,7 +549,7 @@ class GMMUBMSegmentation(SKLearnMixin):
     """
 
     def __init__(self, n_jobs=1, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-2, min_covar=1e-3,
+                 random_state=None, tol=1e-2, min_covar=1e-3,
                  n_iter=10, n_init=1, params='wmc', init_params='wmc',
                  precomputed_ubm=None, adapt_iter=10, adapt_params='m',
                  calibration=None, lbg=False):
@@ -557,7 +557,7 @@ class GMMUBMSegmentation(SKLearnMixin):
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.random_state = random_state
-        self.thresh = thresh
+        self.tol = tol
         self.min_covar = min_covar
         self.n_iter = n_iter
         self.n_init = n_init
@@ -579,7 +579,7 @@ class GMMUBMSegmentation(SKLearnMixin):
             n_components=self.n_components,
             covariance_type=self.covariance_type,
             random_state=self.random_state,
-            thresh=self.thresh,
+            tol=self.tol,
             min_covar=self.min_covar,
             n_iter=self.n_iter,
             n_init=self.n_init,
