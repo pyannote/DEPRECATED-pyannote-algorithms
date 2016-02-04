@@ -47,6 +47,7 @@ setup(
         'munkres >= 1.0.6',
         'docopt >= 0.6.2',
         'joblib >= 0.8.4'
+        'xarray >= 0.7.0',
     ],
     # versioneer
     version=versioneer.get_version(),

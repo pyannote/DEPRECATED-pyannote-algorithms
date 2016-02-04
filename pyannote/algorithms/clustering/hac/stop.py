@@ -25,107 +25,64 @@
 
 from __future__ import unicode_literals
 
-class HACStop(object):
 
+class HACStop(object):
     """Stopping criterion for hierarchical agglomerative clustering"""
 
     def __init__(self):
         super(HACStop, self).__init__()
 
-    def initialize(
-        self,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
-
-        """
-        Parameters
-        ----------
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
-
-        """
-
-        raise NotImplementedError("Method 'initialize' must be overriden.")
-
-    def update(
-        self, merged_clusters, new_cluster,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
-
-        """
+    def initialize(self, parent=None):
+        """(Optionally) initialize stopping criterion
 
         Parameters
         ----------
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
+        parent : HierarchicalAgglomerativeClustering, optional
         """
+        pass
 
-        raise NotImplementedError("Method 'update' must be overriden.")
-
-    def reached(
-        self,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
-
-        """
+    def update(self, merged_clusters, into, parent=None):
+        """(Optionally) update stopping criterion internal states after merge
 
         Parameters
         ----------
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
-
+        merged_cluster :
+        into :
+        parent : HierarchicalAgglomerativeClustering, optional
         """
+        pass
 
-        raise NotImplementedError("Method 'reached' must be overriden.")
-
-    def finalize(
-        self,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
-        """
+    def reached(self, parent=None):
+        """Check whether the stopping criterion is reached
 
         Parameters
         ----------
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
+        parent : HierarchicalAgglomerativeClustering, optional
+
+        Returns
+        -------
+        reached : boolean
+            True if the stopping criterion is reached, False otherwise.
+        """
+        return False
+
+    def finalize(self, parent=None):
+        """(Optionally) post-process
+
+        Default behavior is to return result of penultimate iteration when the
+        stopping criterion is reached, and the last iteration otherwise.
+
+        Parameters
+        ----------
+        parent : HierarchicalAgglomerativeClustering, optional
 
         Returns
         -------
         final : Annotation
-            Annotation when stop criterion is reached
 
         """
-
-        raise NotImplementedError("Method 'finalize' must be overriden.")
+        if self.reached(parent=parent):
+            final_state = parent.history[-2]
+        else:
+            final_state = parent.current_state
+        return final_state
