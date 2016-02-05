@@ -130,43 +130,57 @@ class BICClustering(HierarchicalAgglomerativeClustering):
         super(BICClustering, self).__init__(model=model, stop=stop, **kwargs)
 
 
-# class ContiguousConstraint(HACConstraint):
+class ContiguousConstraint(HACConstraint):
 
-#     def __init__(self, gap=0.0):
-#         super(ContiguousConstraint, self).__init__()
-#         self.gap = gap
+    def __init__(self, gap=0.0):
+        super(ContiguousConstraint, self).__init__()
+        self.gap = gap
 
-#     def initialize(
-#         self,
-#         annotation=None, models=None, matrix=None, history=None, feature=None
-#     ):
-#         pass
+    def update_matrix(self, annotation=None, matrix=None, mergeableSegments=None):
+        mergeableClusters = []
+        for seg1, seg2 in mergeableSegments:
+            for c1 in annotation.get_labels(seg1):
+               for c2 in annotation.get_labels(seg2):
+                    if c1 != c2:
+                        mergeableClusters.append([c1, c2])
 
-#     def update(
-#         self, merged_clusters, new_cluster,
-#         annotation=None, models=None, matrix=None, history=None, feature=None
-#     ):
-#         pass
-
-#     def met(
-#         self, clusters,
-#         annotation=None, models=None, matrix=None, history=None, feature=None
-#     ):
-#         pass
+        for c1 in annotation_tracks.labels():
+            for c2 in annotation_tracks.labels():
+                if [c1, c2] not in mergeableClusters:
+                    self.matrix[c1, c2] = -np.inf
 
 
-# class BICLinearClustering(HierarchicalAgglomerativeClustering):
+    def initialize(self, annotation=None, models=None, matrix=None, history=None, feature=None):
+        mergeableSegments = []
+        l_seg = list(annotation.timeline())
+        for i in range(len(l_seg)-1):
+            if l_seg[i].end - l_seg[i+1].start <= self.gap:
+                mergeableSegments.append([l_seg[i], l_seg[i+1]])
 
-#     def __init__(
-#         self, covariance_type='diag', penalty_coef=1.0, gap=0.0
-#     ):
+        update_matrix(annotation, matrix, mergeableSegments)
 
-#         stop = BICStop()
-#         model = BICModel(
-#             covariance_type=covariance_type, penalty_coef=penalty_coef
-#         )
+    def update(self, merged_clusters, new_cluster, annotation=None, models=None, matrix=None, history=None, feature=None):
+        mergeableSegments = []
+        for seg1 in annotation.subset([new_cluster]).get_timeline():
+            for seg2 in annotation.get_timeline()
+                if seg1.end - seg2.start <= self.gap or seg2.end - seg1.start <= self.gap:
+                    mergeableSegments.append([seg1, seg2])
 
-#         constraint = ContiguousConstraint(gap=gap)
+        update_matrix(annotation, matrix, mergeableSegments)
 
-#         super(BICLinearClustering, self).__init__(
-#             model=model, stop=stop, constraint=constraint)
+    def met(self, clusters, annotation=None, models=None, matrix=None, history=None, feature=None):
+        c1, c2 = clusters
+        if matrix[c1, c2] != -np.inf
+            return True
+        return False
+
+class BICLinearClustering(HierarchicalAgglomerativeClustering):
+
+    def __init__(self, covariance_type='diag', penalty_coef=1.0, gap=0.0):
+
+        stop = BICStop()
+        model = BICModel(covariance_type=covariance_type, penalty_coef=penalty_coef)
+
+        constraint = ContiguousConstraint(gap=gap)
+
+        super(BICLinearClustering, self).__init__(model=model, stop=stop, constraint=constraint)
