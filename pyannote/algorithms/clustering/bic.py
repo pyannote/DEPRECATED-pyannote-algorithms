@@ -28,7 +28,7 @@
 
 from hac import HierarchicalAgglomerativeClustering
 from hac import HACModel
-from hac import HACStop
+from hac.stop import SimilarityThreshold
 from hac.constraint import CloseInTime
 from pyannote.algorithms.stats.gaussian import Gaussian
 
@@ -61,19 +61,13 @@ class BICModel(HACModel):
         return -delta_bic
 
 
-class BICStop(HACStop):
-
-    def reached(self, parent=None):
-        return parent.history.iterations[-1].similarity < 0
-
-
 class BICClustering(HierarchicalAgglomerativeClustering):
 
-    def __init__(self, covariance_type='full', penalty_coef=3.5):
+    def __init__(self, covariance_type='full', penalty_coef=3.5, force=False):
 
         model = BICModel(covariance_type=covariance_type,
                          penalty_coef=penalty_coef)
-        stopping_criterion = BICStop()
+        stopping_criterion = SimilarityThreshold(threshold=0.0, force=force)
 
         super(BICClustering, self).__init__(
             model, stopping_criterion=stopping_criterion)
@@ -81,11 +75,11 @@ class BICClustering(HierarchicalAgglomerativeClustering):
 
 class LinearBICClustering(HierarchicalAgglomerativeClustering):
 
-    def __init__(self, covariance_type='diag', penalty_coef=1.0, gap=5.0):
+    def __init__(self, covariance_type='diag', penalty_coef=1.0, gap=5.0, force=False):
 
         model = BICModel(covariance_type=covariance_type,
                          penalty_coef=penalty_coef)
-        stopping_criterion = BICStop()
+        stopping_criterion = SimilarityThreshold(threshold=0.0, force=force)
         constraint = CloseInTime(closer_than=gap)
 
         super(LinearBICClustering, self).__init__(
