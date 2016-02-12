@@ -33,10 +33,8 @@ from __future__ import unicode_literals
 
 from xarray import DataArray
 import numpy as np
-from itertools import combinations
-import networkx as nx
 from pyannote.core import Segment
-
+from scipy.sparse.csgraph import connected_components
 
 class HACConstraint(object):
 
@@ -125,28 +123,26 @@ class DoNotCooccur(HACConstraint):
         for (segment1, track1), (segment2, track2) in current_state.co_iter(current_state):
             i = current_state[segment1, track1]
             j = current_state[segment2, track2]
-            self._cooccur.loc[i, j] += 1
-            self._cooccur.loc[j, i] += 1
+            if i == j:
+                continue
+            self._cooccur.loc[i, j] = 1
+            self._cooccur.loc[j, i] = 1
 
     def mergeable(self, clusters, parent=None):
-        s = sum(self._cooccur.loc[i, j] for i, j in combinations(clusters, 2))
-        return s == 0
+        return self._cooccur.loc[clusters, clusters].sum().item() == 0.
 
     def update(self, merged_clusters, new_cluster, parent=None):
 
-        clusters = parent.current_state.labels()
+        # clusters that will be removed
+        _clusters = list(set(merged_clusters) - set([new_cluster]))
 
-        for i in clusters:
-            for j in merged_clusters:
-                self._cooccur.loc[i, new_cluster] += self._cooccur.loc[i, j]
-            self._cooccur.loc[new_cluster, i] = self._cooccur.loc[i, new_cluster]
+        # update coooccurrence matrix
+        self._cooccur.loc[new_cluster, :] += self._cooccur.loc[_clusters, :].sum(dim='i')
+        self._cooccur.loc[:, new_cluster] += self._cooccur.loc[:, _clusters].sum(dim='j')
 
-        # remove merged clusters
-        for j in merged_clusters:
-            if j == new_cluster:
-                continue
-            self._cooccur = self._cooccur.drop(j, dim='i')
-            self._cooccur = self._cooccur.drop(j, dim='j')
+        # remove clusters
+        self._cooccur = self._cooccur.drop(_clusters, dim='i').drop(_clusters, dim='j')
+
 
 class CloseInTime(HACConstraint):
 
@@ -178,25 +174,17 @@ class CloseInTime(HACConstraint):
 
     def update(self, merged_clusters, new_cluster, parent=None):
 
-        clusters = parent.current_state.labels()
+        # clusters that will be removed
+        _clusters = list(set(merged_clusters) - set([new_cluster]))
 
-        for i in clusters:
-            for j in merged_clusters:
-                self._neighbours.loc[i, new_cluster] += self._neighbours.loc[i, j]
-            self._neighbours.loc[new_cluster, i] = self._neighbours.loc[i, new_cluster]
+        # update coooccurrence matrix
+        self._neighbours.loc[new_cluster, :] += self._neighbours.loc[_clusters, :].sum(dim='i')
+        self._neighbours.loc[:, new_cluster] += self._neighbours.loc[:, _clusters].sum(dim='j')
 
-        # remove merged clusters
-        for j in merged_clusters:
-            if j == new_cluster:
-                continue
-            self._neighbours = self._neighbours.drop(j, dim='i')
-            self._neighbours = self._neighbours.drop(j, dim='j')
+        # remove clusters
+        self._neighbours = self._neighbours.drop(_clusters, dim='i').drop(_clusters, dim='j')
 
     def mergeable(self, clusters, parent=None):
-
-        closer_than_graph = nx.Graph()
-        for i, j in combinations(clusters, 2):
-            if self._neighbours.loc[i, j]:
-                closer_than_graph.add_edge(i, j)
-
-        return nx.number_connected_components(closer_than_graph) == 1
+        return connected_components(
+            self._neighbours.loc[clusters, clusters],
+            directed=False, return_labels=False) == 1
