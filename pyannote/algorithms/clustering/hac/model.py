@@ -110,8 +110,8 @@ class HACModel(object):
         j = ij % n_j
 
         similarity = self._similarity[i, j].item()
-        clusters = (self._similarity.coords['i'][i].item(),
-                    self._similarity.coords['j'][j].item())
+        clusters = [self._similarity.coords['i'][i].item(),
+                    self._similarity.coords['j'][j].item()]
 
         return clusters, similarity
 
