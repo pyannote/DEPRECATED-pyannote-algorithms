@@ -44,6 +44,7 @@ setup(
         'pyannote.parser >= 0.4.2',
         'scikit-learn >= 0.17',
         'scipy >=0.17.0',
+        'networkx >= 1.11',
         'munkres >= 1.0.7',
         'docopt >= 0.6.2',
         'joblib >= 0.9.4',
