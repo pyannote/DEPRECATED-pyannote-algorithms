@@ -26,7 +26,7 @@
 from __future__ import unicode_literals
 
 from collections import namedtuple
-
+from networkx import DiGraph, connected_components, topological_sort
 
 class HACIteration(
     namedtuple('HACIteration',
@@ -114,15 +114,33 @@ class HACHistory(object):
         if n < 0:
             n = len(self) + 1 + n
 
+        # dendrogram stored as directed graph
+        # cluster1 --> cluster2 means cluster1 was merged into cluster2
+        g = DiGraph()
+
         # i = 0 ==> starting point
         # i = 1 ==> after first iteration
         # i = 2 ==> aftr second iterations
         # ... etc ...
-        for i, annotation in enumerate(self):
+
+        for i, iteration in enumerate(self.iterations):
             if i+1 > n:
                 break
+            for cluster in iteration.merge:
+                if cluster == iteration.into:
+                    continue
+                g.add_edge(cluster, iteration.into)
 
-        return annotation
+        # any cluster is mapped to the last cluster in its topologically
+        # ordered connected component
+        mapping = {}
+        for clusters in connected_components(g.to_undirected()):
+            clusters = topological_sort(g, nbunch=clusters, reverse=True)
+            for cluster in clusters[1:]:
+                mapping[cluster] = clusters[0]
+
+        # actual mapping
+        return self.starting_point.translate(mapping)
 
     def __iter__(self):
         """"""
