@@ -73,6 +73,8 @@ class HACModel(object):
 
         try:
             self._similarity = self.compute_similarity_matrix(parent=None)
+            for cluster in clusters:
+                self._similarity.loc[cluster, cluster] = -np.inf
 
         except NotImplementedError as e:
 
