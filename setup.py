@@ -40,13 +40,15 @@ setup(
         'scripts/pyannote_hmm.py',
     ],
     install_requires=[
-        'pyannote.core >= 0.3',
-        'pyannote.parser >= 0.2',
-        'scikit-learn >= 0.14',
-        'scipy >=0.11.0',
-        'munkres >= 1.0.6',
+        'pyannote.core >= 0.4.5',
+        'pyannote.parser >= 0.4.2',
+        'scikit-learn >= 0.17',
+        'scipy >=0.17.0',
+        'networkx >= 1.11',
+        'munkres >= 1.0.7',
         'docopt >= 0.6.2',
-        'joblib >= 0.8.4'
+        'joblib >= 0.9.4',
+        'xarray >= 0.7.0',
     ],
     # versioneer
     version=versioneer.get_version(),

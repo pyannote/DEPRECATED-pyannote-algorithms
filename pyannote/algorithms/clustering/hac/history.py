@@ -26,45 +26,44 @@
 from __future__ import unicode_literals
 
 from collections import namedtuple
-
+from networkx import DiGraph, connected_components, topological_sort
 
 class HACIteration(
     namedtuple('HACIteration',
-               ['merged_clusters', 'similarity', 'new_cluster'])
+               ['merge', 'similarity', 'into'])
 ):
 
     """Iteration of hierarchical agglomerative clustering
 
     Parameters
     ----------
-    merged_clusters : iterable
+    merge : iterable
         Unique identifiers of merged clusters
     similarity : float
         Similarity between merged clusters
-    new_cluster : hashable
+    into : hashable
         Unique identifier of resulting clusters
 
     """
-    def __new__(cls, merged_clusters, similarity, new_cluster):
+    def __new__(cls, merge, similarity, into):
         return super(HACIteration, cls).__new__(
-            cls, merged_clusters, similarity, new_cluster)
+            cls, merge, similarity, into)
 
 
 class HACHistory(object):
-
     """History of hierarchical agglomerative clustering
 
     Parameters
     ----------
-    annotation : Annotation
-        Input annotation
+    starting_point : Annotation
+        Starting point
     iterations : iterable, optional
         HAC iterations in chronological order
     """
 
-    def __init__(self, annotation, iterations=None):
+    def __init__(self, starting_point, iterations=None):
         super(HACHistory, self).__init__()
-        self.annotation = annotation.copy()
+        self.starting_point = starting_point.copy()
         if iterations is None:
             self.iterations = []
         else:
@@ -73,23 +72,23 @@ class HACHistory(object):
     def __len__(self):
         return len(self.iterations)
 
-    def add_iteration(self, merged_clusters, similarity, new_cluster):
+    def add_iteration(self, merge, similarity, into):
         """Add new iteration
 
         Parameters
         ----------
-        merged_clusters : iterable
+        merge : iterable
             Unique identifiers of merged clusters
         similarity : float
             Similarity between merged clusters
-        new_cluster : hashable
+        into : hashable
             Unique identifier of resulting clusters
 
         """
         iteration = HACIteration(
-            merged_clusters=merged_clusters,
+            merge=merge,
             similarity=similarity,
-            new_cluster=new_cluster
+            into=into
         )
         self.iterations.append(iteration)
 
@@ -107,10 +106,48 @@ class HACHistory(object):
             Clustering status after `n` iterations
 
         """
-        annotation = self.annotation.copy()
-        for i in xrange(n):
-            iteration = self.iterations[i]
-            translation = {c: iteration.new_cluster
-                           for c in iteration.merged_clusters}
+
+        # support for history[-1], history[-2]
+        # i = -1 ==> after last iteration
+        # i = -2 ==> after penultimate iteration
+        # ... etc ...
+        if n < 0:
+            n = len(self) + 1 + n
+
+        # dendrogram stored as directed graph
+        # cluster1 --> cluster2 means cluster1 was merged into cluster2
+        g = DiGraph()
+
+        # i = 0 ==> starting point
+        # i = 1 ==> after first iteration
+        # i = 2 ==> aftr second iterations
+        # ... etc ...
+
+        for i, iteration in enumerate(self.iterations):
+            if i+1 > n:
+                break
+            for cluster in iteration.merge:
+                if cluster == iteration.into:
+                    continue
+                g.add_edge(cluster, iteration.into)
+
+        # any cluster is mapped to the last cluster in its topologically
+        # ordered connected component
+        mapping = {}
+        for clusters in connected_components(g.to_undirected()):
+            clusters = topological_sort(g, nbunch=clusters, reverse=True)
+            for cluster in clusters[1:]:
+                mapping[cluster] = clusters[0]
+
+        # actual mapping
+        return self.starting_point.translate(mapping)
+
+    def __iter__(self):
+        """"""
+        annotation = self.starting_point.copy()
+        yield annotation
+        for iteration in self.iterations:
+            translation = {c: iteration.into
+                           for c in iteration.merge}
             annotation = annotation % translation
-        return annotation
+            yield annotation

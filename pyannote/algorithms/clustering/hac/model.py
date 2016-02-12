@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -27,235 +27,171 @@ from __future__ import unicode_literals
 
 """Models for hierarchical agglomerative clustering"""
 
-from pyannote.core.matrix import LabelMatrix
-
+import numpy as np
+from itertools import combinations, product
+from xarray import DataArray
 
 class HACModel(object):
     """"""
-    def __init__(self):
+
+    def __init__(self, is_symmetric=False):
         super(HACModel, self).__init__()
+        self.is_symmetric = is_symmetric
 
-    # ==== Clusters Models ===================================================
+    def __getitem__(self, cluster):
+        return self._models[cluster]
 
-    def get_model(
-        self, cluster,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
+    # models
 
-        """Get model for `cluster`
+    def compute_model(self, cluster, parent=None):
+        """Compute model of cluster given current parent state
 
         Parameters
         ----------
         cluster : hashable
-            Cluster unique identifier (typically, annotation label)
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
+            Cluster identifier
+        parent : HierarchicalAgglomerativeClustering, optional
 
         Returns
         -------
-        model :
-
-        Notes
-        -----
-        This method must be overriden by inheriting class.
+        model : anything
+            Cluster model
         """
+        raise NotImplementedError('Missing method compute_model')
 
-        raise NotImplementedError("Method 'get_model' must be overriden.")
+    def compute_merged_model(self, clusters, parent=None):
+        raise NotImplementedError('Missing method compute_merged_model')
 
-    def get_models(
-        self, clusters,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
+    # 1 vs. 1 similarity/distance
 
-        """Get models for all clusters
+    def compute_distance(self, cluster1, cluster2, parent=None):
+        raise NotImplementedError('')
 
-        Parameters
-        ----------
-        clusters : iterable
-            Iterable over cluster identifiers
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
+    def compute_similarity(self, cluster1, cluster2, parent=None):
+        try:
+            return -self.compute_distance(cluster1, cluster2, parent=parent)
+        except NotImplementedError as e:
+            # one must implement one of compute_similarity & compute_distance
+            raise NotImplementedError('Missing method compute_similarity')
 
+    # 1 vs. N similarity/distance
+
+    def compute_distances(self, cluster, clusters, dim='i', parent=None):
+        raise NotImplementedError('')
+
+    def compute_similarities(self, cluster, clusters, dim='i', parent=None):
+        try:
+            return -self.compute_distances(cluster, clusters, dim=dim, parent=parent)
+        except NotImplementedError as e:
+            raise NotImplementedError('')
+
+    # N vs. N similarity/distance
+
+    def compute_distance_matrix(self, parent=None):
+        raise NotImplementedError('')
+
+    def compute_similarity_matrix(self, parent=None):
+        try:
+            return -self.compute_distance_matrix(parent=parent)
+        except NotImplementedError as e:
+            raise NotImplementedError('')
+
+    def initialize(self, parent=None):
+
+        self._models = {cluster: self.compute_model(cluster, parent=parent)
+                        for cluster in parent.current_state.labels()}
+
+        clusters = list(self._models)
+
+        try:
+            self._similarity = self.compute_similarity_matrix(parent=None)
+            for cluster in clusters:
+                self._similarity.loc[cluster, cluster] = -np.inf
+
+        except NotImplementedError as e:
+
+            n_clusters = len(clusters)
+
+            # initialize similarity at -infinity
+            self._similarity = DataArray(
+                -np.inf * np.ones((n_clusters, n_clusters)),
+                [('i', clusters), ('j', clusters)])
+
+            if self.is_symmetric:
+                for i, j in combinations(clusters, 2):
+                    similarity = self.compute_similarity(i, j, parent=parent)
+                    self._similarity.loc[i, j] = similarity
+                    self._similarity.loc[j, i] = similarity
+            else:
+                for i, j in product(clusters, repeat=2):
+                    similarity = self.compute_similarity(i, j, parent=parent)
+                    self._similarity.loc[i, j] = similarity
+
+    # NOTE - for now this (get_candidates / block) combination assumes
+    # that we merge clusters two-by-two...
+
+    def get_candidates(self, parent=None):
+        """
         Returns
         -------
-        models : dict
-            {cluster: model} dictionary for all cluster in `clusters`
-        """
+        clusters : tuple
+        similarity : float
 
-        return {
-            c: self.get_model(
-                c, annotation=annotation, models=models, matrix=matrix,
-                history=history, feature=feature
+        """
+        _, n_j = self._similarity.shape
+        ij = int(self._similarity.argmax())
+        i = ij // n_j
+        j = ij % n_j
+
+        similarity = self._similarity[i, j].item()
+        clusters = [self._similarity.coords['i'][i].item(),
+                    self._similarity.coords['j'][j].item()]
+
+        return clusters, similarity
+
+    def block(self, clusters, parent=None):
+        if len(clusters) > 2:
+            raise NotImplementedError(
+                'Constrained clustering merging 3+ clusters is not supported.'
             )
-            for c in clusters
-        }
+        i, j = clusters
+        self._similarity.loc[i, j] = -np.inf
+        self._similarity.loc[j, i] = -np.inf
 
-    def merge_models(
-        self, clusters,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
+    def update(self, merged_clusters, into, parent=None):
 
-        """Get model resulting from  merging models of all clusters
+        # compute merged model
+        self._models[into] = self.compute_merged_model(merged_clusters,
+                                                       parent=parent)
 
-        Parameters
-        ----------
-        clusters : iterable
-            Iterable over cluster identifiers
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
+        # remove old models and corresponding similarity
+        removed_clusters = list(set(merged_clusters) - set([into]))
+        for cluster in removed_clusters:
+            del self._models[cluster]
+        self._similarity = self._similarity.drop(removed_clusters, dim='i').drop(removed_clusters, dim='j')
 
-        Returns
-        -------
-        model :
+        # compute new similarities
+        # * all at once if model implements compute_similarities
+        # * one by one otherwise
 
-        Notes
-        -----
-        This method must be overriden by inheriting class.
-        """
+        remaining_clusters = list(set(self._models) - set([into]))
 
-        raise NotImplementedError("Method 'merge_models' must be overriden.")
+        try:
+            # all at once (when available)
+            similarity = self.compute_similarities(into, remaining_clusters, dim='j', parent=parent)
+            self._similarity.loc[into, remaining_clusters] = similarity
+            if self.is_symmetric:
+                similarity = similarity.rename({'j': 'i'})
+            else:
+                similarity = self.compute_similarities(into, remaining_clusters, dim='i', parent=parent)
+            self._similarity.loc[remaining_clusters, into] = similarity
 
-    # ==== Clusters Similarity ===============================================
+        except NotImplementedError as e:
 
-    def get_similarity(
-        self, cluster1, cluster2,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
-        """Compute similarity between two clusters
+            for cluster in remaining_clusters:
 
-        Parameters
-        ----------
-        cluster1, cluster2 : hashable
-            Cluster unique identifiers (typically, two annotation labels)
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
-
-        Notes
-        -----
-        This method must be overriden by inheriting class.
-        """
-
-        raise NotImplementedError("Method 'get_similarity' must be overriden.")
-
-    def is_symmetric(self):
-        """
-        Returns
-        -------
-        symmetric : bool
-            True
-
-        Notes
-        -----
-        This method must be overriden by inheriting class.
-        """
-
-        raise NotImplementedError("Method 'is_symmetric' must be overriden.")
-
-    def get_similarity_matrix(
-        self, clusters,
-        annotation=None, models=None, matrix=None, history=None, feature=None
-    ):
-        """Compute clusters similarity matrix
-
-        Parameters
-        ----------
-        clusters : iterable
-        annotation : Annotation, optional
-            Annotation at current iteration
-        models : dict, optional
-            Cluster models at current iteration
-        matrix : LabelMatrix, optional
-            Cluster similarity matrix at current iteration
-        history : HACHistory, optional
-            Clustering history up to current iteration
-        feature : Feature, optional
-            Feature
-
-        Returns
-        -------
-        matrix : LabelMatrix
-            Clusters similarity matrix
-        """
-
-        if models is None:
-            models = {}
-
-        # compute missing models
-        models = {
-            c: models.get(c, self.get_model(
-                c, annotation=annotation, models=models, matrix=matrix,
-                history=history, feature=feature))
-            for c in clusters
-        }
-
-        # cluster similarity matrix
-        M = LabelMatrix(
-            data=None, dtype=None, rows=clusters, columns=clusters)
-
-        # loop on all pairs of clusters
-        for i, cluster1 in enumerate(clusters):
-            for j, cluster2 in enumerate(clusters):
-
-                # if similarity is symmetric, no need to compute d(j, i)
-                if self.is_symmetric() and j > i:
-                    break
-
-                # compute similarity
-                M[cluster1, cluster2] = self.get_similarity(
-                    cluster1, cluster2, models=models,
-                    annotation=annotation, feature=feature)
-
-                # if similarity is symmetric, d(i,j) == d(j, i)
-                if self.is_symmetric():
-                    M[cluster2, cluster1] = M[cluster1, cluster2]
-
-        return M
-
-    def get_track_similarity_matrix(self, annotation, feature):
-
-        # one cluster per track
-        tracks = annotation.anonymize_tracks()
-        clusters = tracks.labels()
-
-        clusterMatrix = self.get_similarity_matrix(
-            clusters, annotation=tracks, feature=feature)
-
-        trackMatrix = LabelMatrix()
-        for s1, t1, c1 in tracks.itertracks(label=True):
-            for s2, t2, c2 in tracks.itertracks(label=True):
-                trackMatrix[(s1, t1), (s2, t2)] = clusterMatrix[c1, c2]
-
-        return trackMatrix
-
+                similarity = self.compute_similarity(into, cluster, parent=parent)
+                self._similarity.loc[into, cluster] = similarity
+                if not self.is_symmetric:
+                    similarity = self.compute_similarity(cluster, into, parent=parent)
+                self._similarity.loc[cluster, into] = similarity
