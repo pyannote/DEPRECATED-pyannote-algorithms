@@ -60,11 +60,30 @@ class HACModel(object):
     def compute_merged_model(self, clusters, parent=None):
         raise NotImplementedError('Missing method compute_merged_model')
 
+    # 1 vs. 1 similarity/distance
+
+    def compute_distance(self, cluster1, cluster2, parent=None):
+        raise NotImplementedError('')
+
     def compute_similarity(self, cluster1, cluster2, parent=None):
-        raise NotImplementedError('Missing method compute_similarity')
+        try:
+            return -self.compute_distance(cluster1, cluster2, parent=parent)
+        except NotImplementedError as e:
+            # one must implement one of compute_similarity & compute_distance
+            raise NotImplementedError('Missing method compute_similarity')
+
+        raise NotImplementedError('')
+
+    # N vs. N similarity/distance
+
+    def compute_distance_matrix(self, parent=None):
+        raise NotImplementedError('')
 
     def compute_similarity_matrix(self, parent=None):
-        raise NotImplementedError('')
+        try:
+            return -self.compute_distance_matrix(parent=parent)
+        except NotImplementedError as e:
+            raise NotImplementedError('')
 
     def initialize(self, parent=None):
 
