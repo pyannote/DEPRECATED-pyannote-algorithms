@@ -58,7 +58,7 @@ class LBG(object):
         Floor on the diagonal of the covariance matrix to prevent
         overfitting.  Defaults to 1e-3.
 
-    thresh : float, optional
+    tol : float, optional
         Convergence threshold. Defaults to 1e-2.
 
     n_iter : int, optional
@@ -98,7 +98,7 @@ class LBG(object):
     """
 
     def __init__(self, n_components=1, covariance_type='diag',
-                 random_state=None, thresh=1e-5, min_covar=1e-3,
+                 random_state=None, tol=1e-5, min_covar=1e-3,
                  n_iter=10, disturb=0.05, sampling=0, logger=None):
 
         if covariance_type != 'diag':
@@ -110,7 +110,7 @@ class LBG(object):
         self.n_components = n_components
         self.covariance_type = covariance_type
         self.random_state = random_state
-        self.thresh = thresh
+        self.tol = tol
         self.min_covar = min_covar
         self.n_iter = n_iter
         self.disturb = disturb
@@ -245,7 +245,7 @@ class LBG(object):
                     gmm.n_components, i + 1, x.shape[0], ll, gain))
 
                 # converged?
-                if (i > 0) and abs(gain) < self.thresh:
+                if (i > 0) and abs(gain) < self.tol:
                     break
 
                 previous_ll = ll
