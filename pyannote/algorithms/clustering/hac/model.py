@@ -151,13 +151,11 @@ class HACModel(object):
         self._models[into] = self.compute_merged_model(merged_clusters,
                                                        parent=parent)
 
-        # remove meaning rows and colums
-        for cluster in merged_clusters:
-            if cluster == into:
-                continue
+        # remove old models and corresponding similarity
+        removed_clusters = list(set(merged_clusters) - set([into]))
+        for cluster in removed_clusters:
             del self._models[cluster]
-            self._similarity = self._similarity.drop(cluster, dim='i')
-            self._similarity = self._similarity.drop(cluster, dim='j')
+        self._similarity = self._similarity.drop(removed_clusters, dim='i').drop(removed_clusters, dim='j')
 
         clusters = list(self._models)
 
