@@ -94,6 +94,9 @@ class HACModel(object):
                     similarity = self.compute_similarity(i, j, parent=parent)
                     self._similarity.loc[i, j] = similarity
 
+    # NOTE - for now this (get_candidates / block) combination assumes
+    # that we merge clusters two-by-two...
+
     def get_candidates(self, parent=None):
         """
         Returns
@@ -114,10 +117,13 @@ class HACModel(object):
         return clusters, similarity
 
     def block(self, clusters, parent=None):
-        for i, j in combinations(clusters, 2):
-            self._similarity.loc[i, j] = -np.inf
-            self._similarity.loc[j, i] = -np.inf
-        return
+        if len(clusters) > 2:
+            raise NotImplementedError(
+                'Constrained clustering merging 3+ clusters is not supported.'
+            )
+        i, j = clusters
+        self._similarity.loc[i, j] = -np.inf
+        self._similarity.loc[j, i] = -np.inf
 
     def update(self, merged_clusters, into, parent=None):
 
