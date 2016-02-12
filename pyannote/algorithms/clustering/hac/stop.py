@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2013-2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2013-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -22,6 +22,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
 
 from __future__ import unicode_literals
 
@@ -81,8 +84,69 @@ class HACStop(object):
         final : Annotation
 
         """
+
+        # clustering stopped for two possible reasons.
+        # either it reached the stopping criterion...
         if self.reached(parent=parent):
-            final_state = parent.history[-2]
-        else:
-            final_state = parent.current_state
-        return final_state
+            return parent.history[-2]
+
+        # ... or there is nothing left to merge
+        return parent.current_state
+
+
+class SimilarityThreshold(HACStop):
+
+    def __init__(self, threshold=0.0, force=False):
+        super(SimilarityThreshold, self).__init__()
+        self.threshold = threshold
+        self.force = force
+
+    def reached(self, parent=None):
+        _reached = parent.history.iterations[-1].similarity < self.threshold
+        if self.force:
+            # remember which iteration reached the threshold
+            if not hasattr(self, '_reached_at') and _reached:
+                self._reached_at = len(parent.history)
+            return False
+        return _reached
+
+    def finalize(self, parent=None):
+
+        if self.force:
+            # clustering was forced to go all the way up to one big cluster
+            # therefore we need to reconstruct the state it was when it first
+            # reached the stopping criterion
+            if hasattr(self, '_reached_at'):
+                return parent.history[self._reached_at - 1]
+            return parent.current_state
+
+        # clustering stopped for two possible reasons.
+        # either it reached the stopping criterion...
+        if self.reached(parent=parent):
+            return parent.history[-2]
+
+        # ... or there is nothing left to merge
+        return parent.current_state
+
+
+class DistanceThreshold(SimilarityThreshold):
+
+    def reached(self, parent=None):
+        _reached = parent.history.iterations[-1].similarity < -self.threshold
+        if self.force:
+            # remember which iteration reached the threshold
+            if not hasattr(self, '_reached_at') and _reached:
+                self._reached_at = len(parent.history)
+            return False
+        return _reached
+
+
+# class InflexionPoint(HACStop):
+#
+#     def reached(self, parent=None):
+#         return False
+#
+#     def finalize(self, parent=None):
+#         y = np.array(i.similarity for i in parent.history.iterations)
+#         i = find_inflextion_point(y)
+#         return parent.history[i]
