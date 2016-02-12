@@ -1,3 +1,8 @@
+### Version 0.5 (2016-02-12)
+
+  - refactor: complete refactoring of hierarchical agglomerative clustering
+  - chore: deprecates 'thresh' parameter in favor of 'tol'
+
 ### Version 0.4.6 (2015-03-20)
 
   - feat: new methods add to GMMClassification (score and LLR)
@@ -5,7 +10,7 @@
 ### Version 0.4.4 (2015-03-16)
 
   - fix: inherit GMMUBMClassification.predict_proba
-  - setup: 
+  - setup:
 
 ### Version 0.4.1 (2015-02-26)
 
@@ -24,7 +29,7 @@
 ### Version 0.3.1 (2015-01-23)
 
   - feat: BIC segmentation algorithm
-  - refactor: duration-constrained Viterbi 
+  - refactor: duration-constrained Viterbi
 
 ### Version 0.2.1 (2015-01-14)
 
@@ -48,7 +53,7 @@
 
 ### Version 0.0.4 (2014-08-05)
 
-  - feat(alignment): add transcription alignment 
+  - feat(alignment): add transcription alignment
 
 ### Version 0.0.3 (2014-07-08)
 
@@ -56,7 +61,7 @@
 
 ### Version 0.0.2 (2014-07-08)
 
-  - feat(segmentation): add algorithms based on sliding windows 
+  - feat(segmentation): add algorithms based on sliding windows
   - feat(alignment): add generic dynamic time warping implementation
   - feat(stats): add log-likelihood ratio linear/isotonic regression
   - feat(stats): add Linde–Buzo–Gray algorithm for GMM estimation
