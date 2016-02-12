@@ -41,6 +41,8 @@ class HACModel(object):
     def __getitem__(self, cluster):
         return self._models[cluster]
 
+    # models
+
     def compute_model(self, cluster, parent=None):
         """Compute model of cluster given current parent state
 
@@ -72,7 +74,16 @@ class HACModel(object):
             # one must implement one of compute_similarity & compute_distance
             raise NotImplementedError('Missing method compute_similarity')
 
+    # 1 vs. N similarity/distance
+
+    def compute_distances(self, cluster, clusters, dim='i', parent=None):
         raise NotImplementedError('')
+
+    def compute_similarities(self, cluster, clusters, dim='i', parent=None):
+        try:
+            return -self.compute_distances(cluster, clusters, dim=dim, parent=parent)
+        except NotImplementedError as e:
+            raise NotImplementedError('')
 
     # N vs. N similarity/distance
 
@@ -90,6 +101,8 @@ class HACModel(object):
         self._models = {cluster: self.compute_model(cluster, parent=parent)
                         for cluster in parent.current_state.labels()}
 
+        clusters = list(self._models)
+
         try:
             self._similarity = self.compute_similarity_matrix(parent=None)
             for cluster in clusters:
@@ -97,7 +110,6 @@ class HACModel(object):
 
         except NotImplementedError as e:
 
-            clusters = list(self._models)
             n_clusters = len(clusters)
 
             # initialize similarity at -infinity
@@ -148,6 +160,7 @@ class HACModel(object):
 
     def update(self, merged_clusters, into, parent=None):
 
+        # compute merged model
         self._models[into] = self.compute_merged_model(merged_clusters,
                                                        parent=parent)
 
@@ -157,34 +170,28 @@ class HACModel(object):
             del self._models[cluster]
         self._similarity = self._similarity.drop(removed_clusters, dim='i').drop(removed_clusters, dim='j')
 
-        clusters = list(self._models)
+        # compute new similarities
+        # * all at once if model implements compute_similarities
+        # * one by one otherwise
 
-        for j in clusters:
-            if j == into:
-                continue
+        remaining_clusters = list(set(self._models) - set([into]))
 
-            similarity = self.compute_similarity(into, j, parent=parent)
-            self._similarity.loc[into, j] = similarity
+        try:
+            # all at once (when available)
+            similarity = self.compute_similarities(into, remaining_clusters, dim='j', parent=parent)
+            self._similarity.loc[into, remaining_clusters] = similarity
+            if self.is_symmetric:
+                similarity = similarity.rename({'j': 'i'})
+            else:
+                similarity = self.compute_similarities(into, remaining_clusters, dim='i', parent=parent)
+            self._similarity.loc[remaining_clusters, into] = similarity
 
-            if not self.is_symmetric:
-                similarity = self.compute_similarity(j, into, parent=parent)
+        except NotImplementedError as e:
 
-            self._similarity.loc[j, into] = similarity
+            for cluster in remaining_clusters:
 
-        return into
-
-    # def get_track_similarity_matrix(self, annotation, feature):
-    #
-    #     # one cluster per track
-    #     tracks = annotation.anonymize_tracks()
-    #     clusters = tracks.labels()
-    #
-    #     clusterMatrix = self.get_similarity_matrix(
-    #         clusters, annotation=tracks, feature=feature)
-    #
-    #     trackMatrix = LabelMatrix()
-    #     for s1, t1, c1 in tracks.itertracks(label=True):
-    #         for s2, t2, c2 in tracks.itertracks(label=True):
-    #             trackMatrix[(s1, t1), (s2, t2)] = clusterMatrix[c1, c2]
-    #
-    #     return trackMatrix
+                similarity = self.compute_similarity(into, cluster, parent=parent)
+                self._similarity.loc[into, cluster] = similarity
+                if not self.is_symmetric:
+                    similarity = self.compute_similarity(cluster, into, parent=parent)
+                self._similarity.loc[cluster, into] = similarity
