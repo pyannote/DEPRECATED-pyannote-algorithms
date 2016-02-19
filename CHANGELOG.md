@@ -1,3 +1,8 @@
+### Version 0.5.1 (2016-02-19)
+
+  - fix: forgot to refactor {Complete|Average|Single}LinkageClustering
+  - refactor: mappers now rely on xarray cooccurrence matrix
+
 ### Version 0.5 (2016-02-12)
 
   - refactor: complete refactoring of hierarchical agglomerative clustering
