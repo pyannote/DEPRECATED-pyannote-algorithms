@@ -127,8 +127,6 @@ class HierarchicalAgglomerativeClustering(object):
             if len(self._current_state.labels()) < 2:
                 break
 
-            # This second loop does not make sense for now.
-            # But it will, when we support constrained clustering in the future
             while True:
 
                 clusters, similarity = self.model.get_candidates(parent=self)
