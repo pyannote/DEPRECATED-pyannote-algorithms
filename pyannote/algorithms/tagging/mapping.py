@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2012-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -12,8 +12,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -23,19 +23,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
+
 from __future__ import unicode_literals
 
 from munkres import Munkres
-import numpy as np
-from pyannote.core.matrix import get_cooccurrence_matrix
 
 
 class BaseMapper(object):
 
     def __init__(self, cost=None):
         super(BaseMapper, self).__init__()
-        self.cost = get_cooccurrence_matrix if cost is None else cost
-        
+        if cost is None:
+            cost = lambda AB: AB[0] * AB[1]
+        self.cost = cost
+
     def __call__(self, A, B):
         raise NotImplementedError()
 
@@ -45,16 +49,13 @@ class ConservativeDirectMapper(BaseMapper):
     def __call__(self, A, B):
 
         # Cooccurrence matrix
-        matrix = self.cost(A, B)
-
-        # For each row, find the most frequent cooccurring column
-        mapping = matrix.argmax(axis=1)
-
+        # for each label in A, find the most cooccurring label in B
         # and keep this pair only if there is no ambiguity
-        mapping = {
-            a: b for a, b in mapping.iteritems()
-            if np.sum((matrix.subset(rows=set([a])) > 0).df.values) == 1
-        }
+        matrix = self.cost(A, B)
+        argmax = matrix.argmax(dim='j').data
+        mapping = {a: b for (a, b) in zip(matrix.coords['i'].values,
+                                          matrix.coords['j'].values[argmax])
+                        if (matrix.loc[a, :] > 0).sum() == 1}
 
         return mapping
 
@@ -63,16 +64,15 @@ class ArgMaxMapper(BaseMapper):
 
     def __call__(self, A, B):
 
-        # Cooccurrence matrix
+        # for each label in A, find the most cooccurring label in B
         matrix = self.cost(A, B)
-
-        # for each row, find the most frequent cooccurring column
-        mapping = matrix.argmax(axis=1)
-
-        # and keep this mapping only if they are really cooccurring
-        mapping = {a: b for a, b in mapping.iteritems() if matrix[a, b] > 0}
+        argmax = matrix.argmax(dim='j').data
+        mapping = {a: b for (a, b) in zip(matrix.coords['i'].values,
+                                          matrix.coords['j'].values[argmax])
+                        if matrix.loc[a, b] > 0}
 
         return mapping
+
 
 class HungarianMapper(BaseMapper):
 
@@ -82,26 +82,14 @@ class HungarianMapper(BaseMapper):
 
     def __call__(self, A, B):
 
-        # Cooccurrence matrix
-        matrix = self.cost(A, B)
+        # transpose matrix in case A has more labels than B
+        Na = len(A.labels())
+        Nb = len(B.labels())
+        if Na > Nb:
+            return {a: b for (b, a) in self.__call__(B, A).items()}
 
-        # Shape and labels
-        nRows, nCols = matrix.shape
-        rows = matrix.get_rows()
-        cols = matrix.get_columns()
+        matrix = self.cost((A, B))
+        mapping = self._munkres.compute(matrix.max() - matrix)
 
-        # Cost matrix
-        N = max(nCols, nRows)
-        C = np.zeros((N, N))
-        C[:nCols, :nRows] = (np.max(matrix.df.values) - matrix.df.values).T
-
-        mapping = {}
-        for b, a in self._munkres.compute(C):
-            if (b < nCols) and (a < nRows):
-                if matrix[rows[a], cols[b]] > 0:
-                    mapping[rows[a]] = cols[b]
-
-        return mapping
-
-
-
+        return dict((matrix.coords['i'][i].item(), matrix.coords['j'][j].item())
+                    for i, j in mapping if matrix[i, j] > 0)
