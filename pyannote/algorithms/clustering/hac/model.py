@@ -177,14 +177,18 @@ class HACModel(object):
         remaining_clusters = list(set(self._models) - set([into]))
 
         try:
-            # all at once (when available)
-            similarity = self.compute_similarities(into, remaining_clusters, dim='j', parent=parent)
-            self._similarity.loc[into, remaining_clusters] = similarity
-            if self.is_symmetric:
-                similarity = similarity.rename({'j': 'i'})
-            else:
-                similarity = self.compute_similarities(into, remaining_clusters, dim='i', parent=parent)
-            self._similarity.loc[remaining_clusters, into] = similarity
+
+            if remaining_clusters:
+                # all at once (when available)
+                similarity = self.compute_similarities(
+                    into, remaining_clusters, dim='j', parent=parent)
+                self._similarity.loc[into, remaining_clusters] = similarity
+                if self.is_symmetric:
+                    similarity = similarity.rename({'j': 'i'})
+                else:
+                    similarity = self.compute_similarities(
+                        into, remaining_clusters, dim='i', parent=parent)
+                self._similarity.loc[remaining_clusters, into] = similarity
 
         except NotImplementedError as e:
 
