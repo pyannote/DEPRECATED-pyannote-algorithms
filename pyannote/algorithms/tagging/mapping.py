@@ -51,7 +51,7 @@ class ConservativeDirectMapper(BaseMapper):
         # Cooccurrence matrix
         # for each label in A, find the most cooccurring label in B
         # and keep this pair only if there is no ambiguity
-        matrix = self.cost(A, B)
+        matrix = self.cost((A, B))
         argmax = matrix.argmax(dim='j').data
         mapping = {a: b for (a, b) in zip(matrix.coords['i'].values,
                                           matrix.coords['j'].values[argmax])
@@ -65,7 +65,7 @@ class ArgMaxMapper(BaseMapper):
     def __call__(self, A, B):
 
         # for each label in A, find the most cooccurring label in B
-        matrix = self.cost(A, B)
+        matrix = self.cost((A, B))
         argmax = matrix.argmax(dim='j').data
         mapping = {a: b for (a, b) in zip(matrix.coords['i'].values,
                                           matrix.coords['j'].values[argmax])
