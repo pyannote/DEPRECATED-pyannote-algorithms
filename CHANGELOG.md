@@ -1,3 +1,7 @@
+### Version 0.5.3 (2016-02-23)
+
+  - fix: bug in {ConservativeDirect|ArgMax}Mapper
+
 ### Version 0.5.2 (2016-02-19)
 
   - fix: forgot to refactor {Complete|Average|Single}LinkageClustering
