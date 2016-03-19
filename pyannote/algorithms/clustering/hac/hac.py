@@ -73,7 +73,7 @@ class HierarchicalAgglomerativeClustering(object):
 
         if logger is None:
             logger = logging.getLogger(__name__)
-            logger.setLevel(logging.DEBUG)
+            logger.addHandler(logging.NullHandler())
         self.logger = logger
 
     @property
