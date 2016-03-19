@@ -72,7 +72,8 @@ class DirectTagger(BaseTagger):
             # loop on all tracks
             for s_track in source.get_tracks(s_segment):
                 # try to use source track name whenever possible
-                t_track = tagged.new_track(t_segment, candidate=s_track, prefix='')
+                t_track = tagged.new_track(
+                    t_segment, candidate=s_track, prefix='')
                 # get source label...
                 source_label = source[s_segment, s_track]
                 # ... and tag target segment with it
