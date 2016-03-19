@@ -46,7 +46,8 @@ class DirectTagger(BaseTagger):
     def _tag_timeline(self, source, timeline):
         """Timeline tagging
 
-        Each segment in target `timeline` is tagged all intersecting labels.
+        Each segment in target `timeline` is tagged with all intersecting
+        labels.
 
         Parameters
         ----------
