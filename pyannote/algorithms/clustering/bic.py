@@ -31,6 +31,7 @@ from hac import HACModel
 from hac.stop import SimilarityThreshold
 from hac.constraint import CloseInTime
 from pyannote.algorithms.stats.gaussian import Gaussian
+import logging
 
 
 class BICModel(HACModel):
@@ -63,14 +64,16 @@ class BICModel(HACModel):
 
 class BICClustering(HierarchicalAgglomerativeClustering):
 
-    def __init__(self, covariance_type='full', penalty_coef=3.5, force=False):
+    def __init__(self, covariance_type='full', penalty_coef=3.5,
+                 logger=None, force=False):
 
         model = BICModel(covariance_type=covariance_type,
                          penalty_coef=penalty_coef)
         stopping_criterion = SimilarityThreshold(threshold=0.0, force=force)
 
         super(BICClustering, self).__init__(
-            model, stopping_criterion=stopping_criterion)
+            model, stopping_criterion=stopping_criterion,
+            logger=logger)
 
 
 class LinearBICClustering(HierarchicalAgglomerativeClustering):
