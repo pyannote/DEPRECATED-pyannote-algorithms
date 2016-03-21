@@ -53,4 +53,4 @@ coverage.xml
 # Sphinx documentation
 docs/_build/
 
-doc/.ipynb_checkpoints
+doc/*/.ipynb_checkpoints
