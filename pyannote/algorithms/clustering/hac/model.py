@@ -98,8 +98,9 @@ class HACModel(object):
 
     def initialize(self, parent=None):
 
-        self._models = {cluster: self.compute_model(cluster, parent=parent)
-                        for cluster in parent.current_state.labels()}
+        self._models = {}
+        for cluster in parent.current_state.labels():
+            self._models[cluster] = self.compute_model(cluster, parent=parent)
 
         clusters = list(self._models)
 
@@ -119,12 +120,24 @@ class HACModel(object):
 
             if self.is_symmetric:
                 for i, j in combinations(clusters, 2):
+
+                    # compute similarity if (and only if) clusters are mergeable
+                    if not parent.constraint.mergeable([i, j], parent=parent):
+                        continue
+
                     similarity = self.compute_similarity(i, j, parent=parent)
+
                     self._similarity.loc[i, j] = similarity
                     self._similarity.loc[j, i] = similarity
             else:
                 for i, j in product(clusters, repeat=2):
+
+                    # compute similarity if (and only if) clusters are mergeable
+                    if not parent.constraint.mergeable([i, j], parent=parent):
+                        continue
+
                     similarity = self.compute_similarity(i, j, parent=parent)
+
                     self._similarity.loc[i, j] = similarity
 
     # NOTE - for now this (get_candidates / block) combination assumes
@@ -192,10 +205,19 @@ class HACModel(object):
 
         except NotImplementedError as e:
 
+            if remaining_clusters:
+                self._similarity.loc[into, remaining_clusters] = -np.inf
+                self._similarity.loc[remaining_clusters, into] = -np.inf
+
             for cluster in remaining_clusters:
 
-                similarity = self.compute_similarity(into, cluster, parent=parent)
-                self._similarity.loc[into, cluster] = similarity
-                if not self.is_symmetric:
-                    similarity = self.compute_similarity(cluster, into, parent=parent)
-                self._similarity.loc[cluster, into] = similarity
+                # compute similarity if (and only if) clusters are mergeable
+                if parent.constraint.mergeable([into, cluster], parent=parent):
+                    similarity = self.compute_similarity(
+                        into, cluster, parent=parent)
+                    self._similarity.loc[into, cluster] = similarity
+
+                    if not self.is_symmetric:
+                        similarity = self.compute_similarity(
+                            cluster, into, parent=parent)
+                    self._similarity.loc[cluster, into] = similarity
