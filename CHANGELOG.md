@@ -1,3 +1,7 @@
+### Version 0.5.4 (2016-03-21)
+
+  - improve: faster constrained hierachichal agglomerative clustering
+
 ### Version 0.5.3 (2016-02-23)
 
   - fix: bug in {ConservativeDirect|ArgMax}Mapper
