@@ -228,6 +228,10 @@ class SKLearnGMMClassification(BaseEstimator, ClassifierMixin):
         if self.calibration == 'isotonic':
             return fit_isotonic_regression
 
+        TEMPLATE = '"{calibration}" calibration method is not supported.'
+        message = TEMPLATE.format(calibration=repr(self.calibration))
+        raise NotImplementedError(message)
+
     def _fit_calibrations(self, X, y):
 
         fit_calibration = self._get_fit_calibration()

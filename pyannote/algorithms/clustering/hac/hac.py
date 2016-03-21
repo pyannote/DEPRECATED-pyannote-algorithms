@@ -73,7 +73,7 @@ class HierarchicalAgglomerativeClustering(object):
 
         if logger is None:
             logger = logging.getLogger(__name__)
-            logger.setLevel(logging.DEBUG)
+            logger.addHandler(logging.NullHandler())
         self.logger = logger
 
     @property
@@ -111,11 +111,11 @@ class HierarchicalAgglomerativeClustering(object):
         # initialize history with original annotation
         self._history = HACHistory(self._current_state)
 
-        # initialize models
-        self.model.initialize(parent=self)
-
         # initialize constraints
         self.constraint.initialize(parent=self)
+
+        # initialize models
+        self.model.initialize(parent=self)
 
         # initialize stopping criterion
         self.stopping_criterion.initialize(parent=self)
@@ -165,11 +165,11 @@ class HierarchicalAgglomerativeClustering(object):
             self._history.add_iteration(
                 clusters, similarity, into)
 
-            # == update model
-            self.model.update(clusters, into, parent=self)
-
             # == update constraints
             self.constraint.update(clusters, into, parent=self)
+
+            # == update model
+            self.model.update(clusters, into, parent=self)
 
             #  == update stopping criterion
             # (most of the time, this does nothing)
