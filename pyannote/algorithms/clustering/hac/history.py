@@ -92,6 +92,35 @@ class HACHistory(object):
         )
         self.iterations.append(iteration)
 
+    def last_iteration(self):
+        """Return last iteration"""
+        if len(self) > 0:
+            return self.iterations[-1]
+        else:
+            return None
+
+    def last(self):
+        """Get clustering status after last iteration
+        """
+        if len(self) > 0:
+            return self[-1]
+        else:
+            return self.starting_point
+
+    def penultimate_iteration(self):
+        """Return penultimate iteration"""
+        if len(self) > 1:
+            return self.iterations[-2]
+        else:
+            return self.last_iteration()
+
+    def penultimate(self):
+        """Get clustering status after penultimate iteration"""
+        if len(self) > 1:
+            return self[-2]
+        else:
+            return self.last()
+
     def __getitem__(self, n):
         """Get clustering status after `n` iterations
 

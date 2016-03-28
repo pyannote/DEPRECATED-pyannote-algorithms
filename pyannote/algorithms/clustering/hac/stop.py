@@ -88,10 +88,10 @@ class HACStop(object):
         # clustering stopped for two possible reasons.
         # either it reached the stopping criterion...
         if self.reached(parent=parent):
-            return parent.history[-2]
+            return parent.history.penultimate()
 
         # ... or there is nothing left to merge
-        return parent.current_state
+        return parent.history.last()
 
 
 class SimilarityThreshold(HACStop):
@@ -102,12 +102,20 @@ class SimilarityThreshold(HACStop):
         self.force = force
 
     def reached(self, parent=None):
-        _reached = parent.history.iterations[-1].similarity < self.threshold
+
+        last_iteration = parent.history.last_iteration()
+        if last_iteration is None:
+            return False
+
+        _reached = last_iteration.similarity < self.threshold
+
         if self.force:
             # remember which iteration reached the threshold
             if not hasattr(self, '_reached_at') and _reached:
                 self._reached_at = len(parent.history)
+            # always return False when forcing complete clustering
             return False
+
         return _reached
 
     def finalize(self, parent=None):
@@ -118,26 +126,34 @@ class SimilarityThreshold(HACStop):
             # reached the stopping criterion
             if hasattr(self, '_reached_at'):
                 return parent.history[self._reached_at - 1]
-            return parent.current_state
+            return parent.history.last()
 
         # clustering stopped for two possible reasons.
         # either it reached the stopping criterion...
         if self.reached(parent=parent):
-            return parent.history[-2]
+            return parent.history.penultimate()
 
         # ... or there is nothing left to merge
-        return parent.current_state
+        return parent.history.last()
 
 
 class DistanceThreshold(SimilarityThreshold):
 
     def reached(self, parent=None):
-        _reached = parent.history.iterations[-1].similarity < -self.threshold
+
+        last_iteration = parent.history.last_iteration()
+        if last_iteration is None:
+            return False
+
+        _reached = last_iteration.similarity < -self.threshold
+
         if self.force:
             # remember which iteration reached the threshold
             if not hasattr(self, '_reached_at') and _reached:
                 self._reached_at = len(parent.history)
+            # always return False when forcing complete clustering
             return False
+
         return _reached
 
 
