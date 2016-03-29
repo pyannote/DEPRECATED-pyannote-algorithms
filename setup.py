@@ -27,13 +27,8 @@
 # Hervé BREDIN - http://herve.niderb.fr
 
 
-import versioneer
-versioneer.versionfile_source = 'pyannote/algorithms/_version.py'
-versioneer.versionfile_build = versioneer.versionfile_source
-versioneer.tag_prefix = ''
-versioneer.parentdir_prefix = 'pyannote-algorithms-'
-
 from setuptools import setup, find_packages
+import versioneer
 
 setup(
 
