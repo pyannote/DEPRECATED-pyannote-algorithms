@@ -1,3 +1,7 @@
+### Version 0.5.6 (2016-03-29)
+
+  - fix: remove broken wip code
+
 ### Version 0.5.5 (2016-03-28)
 
   - fix: corner case in hierarchiccal agglomerative clustering
