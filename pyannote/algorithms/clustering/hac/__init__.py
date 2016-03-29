@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2013-2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2013-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,13 +23,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 """Hierarchical agglomerative clustering (HAC)
 
 This module provides base classes for all HAC algorithms
 """
 
-from hac import HierarchicalAgglomerativeClustering
-from model import HACModel
-from stop import HACStop
-from constraint import HACConstraint
-
+from .hac import HierarchicalAgglomerativeClustering
+from .model import HACModel
+from .stop import HACStop
+from .constraint import HACConstraint

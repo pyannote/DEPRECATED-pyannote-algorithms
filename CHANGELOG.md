@@ -1,5 +1,6 @@
-### Version 0.5.6 (2016-03-29)
+### Version 0.6 (2016-03-29)
 
+  - python 3 support
   - fix: remove broken wip code
 
 ### Version 0.5.5 (2016-03-28)

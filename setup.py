@@ -53,6 +53,7 @@ setup(
         'docopt >= 0.6.2',
         'joblib >= 0.9.4',
         'xarray >= 0.7.0',
+        'six >= 1.10.0',
     ],
     # versioneer
     version=versioneer.get_version(),
@@ -69,7 +70,11 @@ setup(
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
         "Natural Language :: English",
+        "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
         "Topic :: Scientific/Engineering"
     ],
 )
