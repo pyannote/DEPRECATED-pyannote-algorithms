@@ -32,6 +32,7 @@ from __future__ import unicode_literals
 
 
 import six
+import six.moves
 import numpy as np
 import networkx as nx
 
@@ -278,8 +279,8 @@ class BaseTranscriptionAlignment(object):
         distance = self.pairwise_distance(vsequence, hsequence)
 
         # align and merge
-        vindex, _ = six.zip(*vsequence)
-        hindex, _ = six.zip(*hsequence)
+        vindex, _ = six.moves.zip(*vsequence)
+        hindex, _ = six.moves.zip(*hsequence)
         alignment = self._dtw.get_alignment(vindex, hindex, distance=distance)
         merged = self.merge(vtranscription, htranscription, alignment)
 
@@ -306,8 +307,8 @@ class WordsToSentencesAlignment(AnyToOneMixin, BaseTranscriptionAlignment):
             where W (resp. S) is the number of words (resp. sentences)
             and distance[w, s] = 0 means sth sentence contains wth word.
         """
-        _, words = six.zip(*iwords)
-        _, sentences = six.zip(*isentences)
+        _, words = six.moves.zip(*iwords)
+        _, sentences = six.moves.zip(*isentences)
         wordInSentence = np.zeros((len(words), len(sentences)), dtype=int)
         for w, word in enumerate(words):
             for s, sentence in enumerate(sentences):
@@ -354,8 +355,8 @@ class TFIDFAlignment(BaseTranscriptionAlignment):
             Shape = len(vsequence) x len(hsequence)
         """
 
-        _, vsentences = six.zip(*vsequence)
-        _, hsentences = six.zip(*hsequence)
+        _, vsentences = six.moves.zip(*vsequence)
+        _, hsentences = six.moves.zip(*hsequence)
 
         if self.adapt:
             self.tfidf.fit(vsentences + hsentences)

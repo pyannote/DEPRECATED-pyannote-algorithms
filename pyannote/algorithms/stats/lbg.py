@@ -31,7 +31,7 @@ from __future__ import unicode_literals
 """Linde–Buzo–Gray algorithm"""
 
 
-import six
+import six.moves
 import numpy as np
 from sklearn.mixture import GMM
 import logging
@@ -130,7 +130,7 @@ class LBG(object):
 
             # start by shuffling X
             X = np.random.permutation(X)
-            for i in six.range(0, N - n, n):
+            for i in six.moves.range(0, N - n, n):
                 yield X[i:i + n, :]
 
     def _split(self, gmm, n_components):
@@ -226,7 +226,7 @@ class LBG(object):
             n *= (gmm.n_components < self.n_components)
 
             # iterate n_iter times (potentially with sampled data)
-            for i, x in six.zip(six.range(self.n_iter), self.sample(X, n)):
+            for i, x in six.moves.zip(six.moves.range(self.n_iter), self.sample(X, n)):
 
                 # one EM iteration
                 gmm.fit(x)

@@ -28,7 +28,7 @@
 
 from __future__ import unicode_literals
 
-import six
+import six.moves
 import numpy as np
 import itertools
 
@@ -127,7 +127,7 @@ class SKLearnMixin:
         if annotation_iter is None:
             annotation_iter = itertools.repeat(None)
 
-        for features, annotation in six.zip(features_iter, annotation_iter):
+        for features, annotation in six.moves.zip(features_iter, annotation_iter):
             yield self.X(features, annotation=annotation, unknown=unknown)
 
     def X_stack(self, features_iter, annotation_iter=None, unknown='keep'):
@@ -164,7 +164,7 @@ class SKLearnMixin:
 
     def Xy_iter(self, features_iter, annotation_iter, unknown='keep'):
 
-        for features, annotation in six.zip(features_iter, annotation_iter):
+        for features, annotation in six.moves.zip(features_iter, annotation_iter):
             yield self.Xy(features, annotation, unknown=unknown)
 
     def Xy_stack(self, features_iter, annotation_iter, unknown='keep'):

@@ -26,7 +26,7 @@
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
 
-import six
+import six.moves
 import numpy as np
 from .viterbi import viterbi_decoding, \
     VITERBI_CONSTRAINT_NONE, \
@@ -91,7 +91,7 @@ class TestViterbiDecoding:
         N = int(ratio * T)
         Ts = np.random.choice(T, size=N, replace=False)
         Ks = np.random.randint(K, size=N)
-        for t, k in six.zip(Ts, Ks):
+        for t, k in six.moves.zip(Ts, Ks):
             constraint[t, k] = VITERBI_CONSTRAINT_MANDATORY
 
         decoded = viterbi_decoding(self.emission, self.transition,
@@ -114,7 +114,7 @@ class TestViterbiDecoding:
         N = int(ratio * T)
         Ts = np.random.choice(T, size=N, replace=False)
         Ks = np.random.randint(K, size=N)
-        for t, k in six.zip(Ts, Ks):
+        for t, k in six.moves.zip(Ts, Ks):
             constraint[t, k] = VITERBI_CONSTRAINT_FORBIDDEN
 
         decoded = viterbi_decoding(self.emission, self.transition,

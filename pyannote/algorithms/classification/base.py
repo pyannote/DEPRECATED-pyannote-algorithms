@@ -29,6 +29,7 @@
 from __future__ import unicode_literals
 
 import six
+import six.moves
 import numpy as np
 from pyannote.core.feature import SlidingWindowFeature
 from pyannote.core.scores import Scores
@@ -66,7 +67,7 @@ class BaseClassification(object):
 
         data = np.vstack([
             f.crop(r.get_timeline().coverage())  # use labeled regions only
-            for r, f in six.zip(annotation_iterator, features_iterator)
+            for r, f in six.moves.zip(annotation_iterator, features_iterator)
         ])
 
         return data
@@ -75,7 +76,7 @@ class BaseClassification(object):
 
         data = np.vstack([
             f.crop(r.label_coverage(target))  # use target regions only
-            for r, f in six.zip(annotation_iterator, features_iterator)
+            for r, f in six.moves.zip(annotation_iterator, features_iterator)
         ])
 
         return data
