@@ -26,12 +26,11 @@
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
 
-
 from __future__ import unicode_literals
 
 """Segment tagging algorithms"""
 
-from base import BaseTagger
+from .base import BaseTagger
 
 
 class DirectTagger(BaseTagger):

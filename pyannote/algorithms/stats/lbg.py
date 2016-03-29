@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2015 CNRS
+# Copyright (c) 2012-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,12 +28,11 @@
 
 from __future__ import unicode_literals
 
-
 """Linde–Buzo–Gray algorithm"""
 
 
+import six.moves
 import numpy as np
-import itertools
 from sklearn.mixture import GMM
 import logging
 
@@ -131,7 +130,7 @@ class LBG(object):
 
             # start by shuffling X
             X = np.random.permutation(X)
-            for i in xrange(0, N - n, n):
+            for i in six.moves.range(0, N - n, n):
                 yield X[i:i + n, :]
 
     def _split(self, gmm, n_components):
@@ -227,7 +226,7 @@ class LBG(object):
             n *= (gmm.n_components < self.n_components)
 
             # iterate n_iter times (potentially with sampled data)
-            for i, x in itertools.izip(xrange(self.n_iter), self.sample(X, n)):
+            for i, x in six.moves.zip(six.moves.range(self.n_iter), self.sample(X, n)):
 
                 # one EM iteration
                 gmm.fit(x)

@@ -3,9 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS
-# Antoine LAURENT (http://www.antoine-laurent.fr)
-# Hervé BREDIN (http://herve.niderb.fr)
+# Copyright (c) 2014-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,16 +23,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Antoine LAURENT - http://www.antoine-laurent.fr
+# Hervé BREDIN  - http://herve.niderb.fr
+
+
 from __future__ import unicode_literals
 
-import itertools
+
+import six
+import six.moves
 import numpy as np
 import networkx as nx
 
 from pyannote.core import T
-from dtw import DynamicTimeWarping
-from dtw import STARTS_BEFORE, STARTS_WITH, STARTS_AFTER
-from dtw import ENDS_BEFORE, ENDS_WITH, ENDS_AFTER
+from .dtw import DynamicTimeWarping
+from .dtw import STARTS_BEFORE, STARTS_WITH, STARTS_AFTER
+from .dtw import ENDS_BEFORE, ENDS_WITH, ENDS_AFTER
 
 
 class OneToAnyMixin:
@@ -138,7 +143,7 @@ class BaseTranscriptionAlignment(object):
         # indicate that the corresponding times will be eventually merged
         # (we also keep track of the origin of the the nodes for later use)
         same = nx.Graph()
-        for (v, h), status in alignment.iteritems():
+        for (v, h), status in six.iteritems(alignment):
             if (status & STARTS_WITH == STARTS_WITH):
                 same.add_edge(('v', v[0]), ('h', h[0]))
 
@@ -163,14 +168,14 @@ class BaseTranscriptionAlignment(object):
         merged.add_edges_from(htranscription.edges(data=True))
 
         # starts by merging nodes
-        for (origin, t), to in mapping.iteritems():
+        for (origin, t), to in six.iteritems(mapping):
             if t != to:
                 # according to Transcription.align documentation,
                 # if both t and to are drifting, the resulting graph
                 # will only contain `to` (from vertical sequence)
                 merged.align(t, to)
 
-        for (v, h), status in alignment.iteritems():
+        for (v, h), status in six.iteritems(alignment):
 
             # connect start times in correct order
             if status & STARTS_WITH != STARTS_WITH:
@@ -274,8 +279,8 @@ class BaseTranscriptionAlignment(object):
         distance = self.pairwise_distance(vsequence, hsequence)
 
         # align and merge
-        vindex, _ = itertools.izip(*vsequence)
-        hindex, _ = itertools.izip(*hsequence)
+        vindex, _ = six.moves.zip(*vsequence)
+        hindex, _ = six.moves.zip(*hsequence)
         alignment = self._dtw.get_alignment(vindex, hindex, distance=distance)
         merged = self.merge(vtranscription, htranscription, alignment)
 
@@ -302,8 +307,8 @@ class WordsToSentencesAlignment(AnyToOneMixin, BaseTranscriptionAlignment):
             where W (resp. S) is the number of words (resp. sentences)
             and distance[w, s] = 0 means sth sentence contains wth word.
         """
-        _, words = itertools.izip(*iwords)
-        _, sentences = itertools.izip(*isentences)
+        _, words = six.moves.zip(*iwords)
+        _, sentences = six.moves.zip(*isentences)
         wordInSentence = np.zeros((len(words), len(sentences)), dtype=int)
         for w, word in enumerate(words):
             for s, sentence in enumerate(sentences):
@@ -350,8 +355,8 @@ class TFIDFAlignment(BaseTranscriptionAlignment):
             Shape = len(vsequence) x len(hsequence)
         """
 
-        _, vsentences = itertools.izip(*vsequence)
-        _, hsentences = itertools.izip(*hsequence)
+        _, vsentences = six.moves.zip(*vsequence)
+        _, hsentences = six.moves.zip(*hsequence)
 
         if self.adapt:
             self.tfidf.fit(vsentences + hsentences)
@@ -360,4 +365,3 @@ class TFIDFAlignment(BaseTranscriptionAlignment):
         H = self.tfidf.transform(hsentences)
 
         return 1. - (V * H.T).toarray()
-

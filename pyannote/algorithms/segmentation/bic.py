@@ -27,6 +27,7 @@
 # Hervé BREDIN - http://herve.niderb.fr
 
 from __future__ import unicode_literals
+
 from ..stats.gaussian import RollingGaussian, bayesianInformationCriterion
 import numpy as np
 from pyannote.core.util import pairwise
@@ -47,9 +48,9 @@ class SKLearnBICSegmentation(object):
 
         g.fit(X, start=start, end=end)
 
-        boundaries = range(start + self.min_samples,
+        boundaries = list(range(start + self.min_samples,
                            end - self.min_samples,
-                           self.precision)
+                           self.precision))
 
         bic = np.empty((len(boundaries),))
         for i, boundary in enumerate(boundaries):

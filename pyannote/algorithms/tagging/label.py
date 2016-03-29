@@ -26,7 +26,6 @@
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
 
-
 from __future__ import unicode_literals
 
 """
@@ -40,8 +39,8 @@ a unique `source` label translation or left unchanged.
 
 """
 
-from base import BaseTagger
-from mapping import HungarianMapper, ArgMaxMapper
+from .base import BaseTagger
+from .mapping import HungarianMapper, ArgMaxMapper
 
 
 class LabelTagger(BaseTagger):

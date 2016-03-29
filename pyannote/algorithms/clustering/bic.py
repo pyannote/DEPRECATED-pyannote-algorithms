@@ -26,9 +26,9 @@
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
 
-from hac import HierarchicalAgglomerativeClustering
-from hac import HACModel
-from hac.stop import SimilarityThreshold
+from .hac import HierarchicalAgglomerativeClustering
+from .hac import HACModel
+from .hac.stop import SimilarityThreshold
 from pyannote.algorithms.stats.gaussian import Gaussian
 import logging
 

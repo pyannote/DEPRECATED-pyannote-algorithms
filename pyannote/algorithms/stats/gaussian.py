@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2012-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,9 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
 
 from __future__ import unicode_literals
 
@@ -188,8 +191,8 @@ class RollingGaussian(Gaussian):
             self.end = end
             return super(RollingGaussian, self).fit(X[start:end])
 
-        i_index = range(start, self.start) + range(self.end, end)
-        o_index = range(self.start, start) + range(end, self.end)
+        i_index = list(range(start, self.start)) + list(range(self.end, end))
+        o_index = list(range(self.start, start)) + list(range(end, self.end))
 
         i_x = np.take(X, i_index, axis=0)
         o_x = np.take(X, o_index, axis=0)

@@ -26,9 +26,9 @@
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
 
-
 from __future__ import unicode_literals
 
+import six
 from munkres import Munkres
 
 
@@ -55,7 +55,7 @@ class ConservativeDirectMapper(BaseMapper):
         argmax = matrix.argmax(dim='j').data
         mapping = {a: b for (a, b) in zip(matrix.coords['i'].values,
                                           matrix.coords['j'].values[argmax])
-                        if (matrix.loc[a, :] > 0).sum() == 1}
+                   if (matrix.loc[a, :] > 0).sum() == 1}
 
         return mapping
 
@@ -86,7 +86,7 @@ class HungarianMapper(BaseMapper):
         Na = len(A.labels())
         Nb = len(B.labels())
         if Na > Nb:
-            return {a: b for (b, a) in self.__call__(B, A).items()}
+            return {a: b for (b, a) in six.iteritems(self.__call__(B, A))}
 
         matrix = self.cost((A, B))
         mapping = self._munkres.compute(matrix.max() - matrix)

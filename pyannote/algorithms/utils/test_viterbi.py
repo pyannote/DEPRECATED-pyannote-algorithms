@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS
+# Copyright (c) 2014-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,9 +26,9 @@
 # AUTHORS
 # Hervé BREDIN - http://herve.niderb.fr
 
+import six.moves
 import numpy as np
-import itertools
-from viterbi import viterbi_decoding, \
+from .viterbi import viterbi_decoding, \
     VITERBI_CONSTRAINT_NONE, \
     VITERBI_CONSTRAINT_MANDATORY, \
     VITERBI_CONSTRAINT_FORBIDDEN
@@ -91,7 +91,7 @@ class TestViterbiDecoding:
         N = int(ratio * T)
         Ts = np.random.choice(T, size=N, replace=False)
         Ks = np.random.randint(K, size=N)
-        for t, k in itertools.izip(Ts, Ks):
+        for t, k in six.moves.zip(Ts, Ks):
             constraint[t, k] = VITERBI_CONSTRAINT_MANDATORY
 
         decoded = viterbi_decoding(self.emission, self.transition,
@@ -114,7 +114,7 @@ class TestViterbiDecoding:
         N = int(ratio * T)
         Ts = np.random.choice(T, size=N, replace=False)
         Ks = np.random.randint(K, size=N)
-        for t, k in itertools.izip(Ts, Ks):
+        for t, k in six.moves.zip(Ts, Ks):
             constraint[t, k] = VITERBI_CONSTRAINT_FORBIDDEN
 
         decoded = viterbi_decoding(self.emission, self.transition,

@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014-2015 CNRS
+# Copyright (c) 2014-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@
 
 from __future__ import unicode_literals
 
+import six.moves
 import numpy as np
 import itertools
 
@@ -57,7 +58,7 @@ def _update_transition(transition, consecutive):
     start = boundary[:-1]
     end = boundary[1:] - 1
 
-    for i, j in itertools.product(range(n_states), repeat=2):
+    for i, j in itertools.product(six.moves.range(n_states), repeat=2):
         new_transition[end[i], start[j]] = transition[i, j]
 
     return new_transition
@@ -84,7 +85,7 @@ def _update_emission(emission, consecutive):
 
     return np.vstack(
         np.tile(e, (c, 1))  # duplicate emission probabilities c times
-        for e, c in itertools.izip(emission.T, consecutive)
+        for e, c in six.moves.zip(emission.T, consecutive)
     ).T
 
 
@@ -93,7 +94,7 @@ def _update_constraint(constraint, consecutive):
 
     return np.vstack(
         np.tile(e, (c, 1))  # duplicate constraint probabilities c times
-        for e, c in itertools.izip(constraint.T, consecutive)
+        for e, c in six.moves.zip(constraint.T, consecutive)
     ).T
 
 
@@ -106,7 +107,7 @@ def _update_states(states, consecutive):
 
     new_states = np.empty(states.shape)
 
-    for i, (s, e) in enumerate(itertools.izip(start, end)):
+    for i, (s, e) in enumerate(six.moves.zip(start, end)):
         new_states[np.where((s <= states) & (states < e))] = i
 
     return new_states
@@ -180,7 +181,7 @@ def viterbi_decoding(emission, transition,
         np.where(constraint == VITERBI_CONSTRAINT_FORBIDDEN)] = LOG_ZERO
 
     # set emission probability to zero for all states but the mandatory one
-    for t, k in itertools.izip(
+    for t, k in six.moves.zip(
         *np.where(constraint == VITERBI_CONSTRAINT_MANDATORY)
     ):
         emission[t, states != k] = LOG_ZERO
