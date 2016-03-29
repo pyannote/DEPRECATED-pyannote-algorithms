@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2014-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,9 +23,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 from __future__ import unicode_literals
 
-import itertools
+import six
 import numpy as np
 from pyannote.core.feature import SlidingWindowFeature
 from pyannote.core.scores import Scores
@@ -57,13 +60,13 @@ class BaseClassification(object):
 
         total = np.sum(chart.values())
         return {label: duration / total
-                for label, duration in chart.iteritems()}
+                for label, duration in six.iteritems(chart)}
 
     def _get_all_data(self, annotation_iterator, features_iterator):
 
         data = np.vstack([
             f.crop(r.get_timeline().coverage())  # use labeled regions only
-            for r, f in itertools.izip(annotation_iterator, features_iterator)
+            for r, f in six.zip(annotation_iterator, features_iterator)
         ])
 
         return data
@@ -72,7 +75,7 @@ class BaseClassification(object):
 
         data = np.vstack([
             f.crop(r.label_coverage(target))  # use target regions only
-            for r, f in itertools.izip(annotation_iterator, features_iterator)
+            for r, f in six.zip(annotation_iterator, features_iterator)
         ])
 
         return data

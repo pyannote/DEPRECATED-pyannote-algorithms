@@ -31,10 +31,10 @@ from __future__ import unicode_literals
 import logging
 import numpy as np
 
-from model import HACModel
-from stop import HACStop
-from constraint import HACConstraint
-from history import HACHistory
+from .model import HACModel
+from .stop import HACStop
+from .constraint import HACConstraint
+from .history import HACHistory
 
 
 class HierarchicalAgglomerativeClustering(object):

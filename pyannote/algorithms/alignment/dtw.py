@@ -252,7 +252,7 @@ class DynamicTimeWarping(object):
                 candidates.append((v, h - 1))
 
             # backtrack one step
-            v, h = min(candidates, key=lambda (i, j): cost[i, j])
+            v, h = min(candidates, key=lambda i_j: cost[i_j[0], i_j[1]])
 
             path.append((v, h))
 

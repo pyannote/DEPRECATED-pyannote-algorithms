@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2014 CNRS
+# Copyright (c) 2012-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,7 @@
 
 from __future__ import unicode_literals
 
+import six
 import itertools
 import numpy as np
 import scipy.signal
@@ -68,7 +69,7 @@ class SlidingWindowsSegmentation(object):
         self.threshold = threshold
         self.min_duration = min_duration
 
-        for key, value in kwargs.iteritems():
+        for key, value in six.iteritems(kwargs):
             setattr(self, key, value)
 
     def diff(self, left, right, feature):
@@ -111,9 +112,9 @@ class SlidingWindowsSegmentation(object):
         result = Timeline()
         for focus in segmentation:
 
-            x, y = zip(*[
+            x, y = list(zip(*[
                 (m, d) for m, d in self.iterdiff(feature, focus)
-            ])
+            ]))
             x = np.array(x)
             y = np.array(y)
 

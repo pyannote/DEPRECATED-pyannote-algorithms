@@ -53,6 +53,7 @@ setup(
         'docopt >= 0.6.2',
         'joblib >= 0.9.4',
         'xarray >= 0.7.0',
+        'six >= 1.10.0',
     ],
     # versioneer
     version=versioneer.get_version(),

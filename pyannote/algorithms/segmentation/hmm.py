@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014 CNRS (Hervé BREDIN - http://herve.niderb.fr)
+# Copyright (c) 2014-2016 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -23,8 +23,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# AUTHORS
+# Hervé BREDIN - http://herve.niderb.fr
+
 from __future__ import unicode_literals
 
+import six
 import numpy as np
 from ..utils.viterbi import viterbi_decoding, \
     VITERBI_CONSTRAINT_NONE, \
@@ -380,9 +384,8 @@ class GMMSegmentation(SKLearnMixin):
             equal_priors=self.equal_priors
         )
 
-        X_iter, y_iter = zip(*list(self.Xy_iter(features_iter,
-                                                annotation_iter,
-                                                unknown='unique')))
+        X_iter, y_iter = list(zip(*list(
+            self.Xy_iter(features_iter, annotation_iter, unknown='unique'))))
 
         self.label_converter_ = LabelConverter()
         self.label_converter_.fit(np.hstack(y_iter))
@@ -435,7 +438,7 @@ class GMMSegmentation(SKLearnMixin):
 
         if isinstance(min_duration, dict):
             mapping = self.label_converter_.mapping()
-            for label, duration in min_duration.iteritems():
+            for label, duration in six.iteritems(min_duration):
                 consecutive[mapping[label]] = \
                     sliding_window.durationToSamples(duration)
 
@@ -592,9 +595,8 @@ class GMMUBMSegmentation(SKLearnMixin):
             lbg=self.lbg
         )
 
-        X_iter, y_iter = zip(*list(self.Xy_iter(features_iter,
-                                                annotation_iter,
-                                                unknown='unique')))
+        X_iter, y_iter = list(zip(*list(
+            self.Xy_iter(features_iter, annotation_iter, unknown='unique'))))
 
         self.label_converter_ = LabelConverter()
         self.label_converter_.fit(np.hstack(y_iter))
@@ -632,7 +634,7 @@ class GMMUBMSegmentation(SKLearnMixin):
 
         if isinstance(min_duration, dict):
             mapping = self.label_converter_.mapping()
-            for label, duration in min_duration.iteritems():
+            for label, duration in six.iteritems(min_duration):
                 consecutive[mapping[label]] = \
                     sliding_window.durationToSamples(duration)
 
