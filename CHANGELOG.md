@@ -1,3 +1,7 @@
+### Version 0.6.2 (2016-03-30)
+
+  - improve: faster hungarian mapping (divide-and-conquer)
+
 ### Version 0.6.1 (2016-03-29)
 
   - python 3 support
