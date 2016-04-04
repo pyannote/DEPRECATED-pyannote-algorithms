@@ -118,7 +118,6 @@ class HungarianMapper(BaseMapper):
             b = ('B', B[b_track])
             cooccurrence_graph.add_edge(a, b)
 
-
         # divide & conquer
         # ------------------
 
@@ -136,5 +135,39 @@ class HungarianMapper(BaseMapper):
 
             local_mapping = self._helper(sub_A, sub_B)
             mapping.update(local_mapping)
+
+        return mapping
+
+
+class GreedyMapper(BaseMapper):
+
+    def __init__(self, cost=None):
+        super(GreedyMapper, self).__init__(cost=cost)
+
+    def __call__(self, A, B):
+
+        matrix = self.cost((A, B))
+        Na, Nb = matrix.shape
+        N = min(Na, Nb)
+
+        mapping = {}
+
+        for i in range(N):
+
+            ab = int(matrix.argmax())
+            a = ab // (Nb-i)
+            b = ab % (Nb-i)
+
+            cost = matrix[a, b].item()
+
+            if cost == 0:
+                break
+
+            alabel = matrix.coords['i'][a].item()
+            blabel = matrix.coords['j'][b].item()
+
+            mapping[alabel] = blabel
+
+            matrix = matrix.drop([alabel], dim='i').drop([blabel], dim='j')
 
         return mapping
