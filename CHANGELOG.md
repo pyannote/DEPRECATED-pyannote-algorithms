@@ -1,3 +1,7 @@
+### Version 0.6.3 (2016-04-04)
+
+  - feat: greedy mapping (fast approximate hungarian mapping)
+
 ### Version 0.6.2 (2016-03-30)
 
   - improve: faster hungarian mapping (divide-and-conquer)
