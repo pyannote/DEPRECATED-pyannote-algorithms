@@ -1,3 +1,7 @@
+### Version 0.6.4 (2016-04-08)
+
+  - feat: add max_gap parameters to linear BIC clustering
+
 ### Version 0.6.3 (2016-04-04)
 
   - feat: greedy mapping (fast approximate hungarian mapping)
