@@ -30,6 +30,7 @@ from .hac import HierarchicalAgglomerativeClustering
 from .hac import HACModel
 from .hac.stop import SimilarityThreshold
 from pyannote.algorithms.stats.gaussian import Gaussian
+import numpy as np
 import logging
 
 
@@ -76,13 +77,25 @@ class BICClustering(HierarchicalAgglomerativeClustering):
 
 
 class LinearBICClustering(object):
+    """Linear BIC clustering
 
+    Parameters
+    ----------
+    covariance_type : {'diag', 'full'}, optional
+        Defaults to 'diag'.
+    penalty_coef : float, optional
+        Defaults to 1.0
+    max_gap : float, optional
+        Defaults to infinity (no constraint)
+
+    """
     def __init__(self,
-                 covariance_type='diag', penalty_coef=1.0,
+                 covariance_type='diag', penalty_coef=1.0, max_gap=np.inf,
                  logger=None):
 
         self.covariance_type = covariance_type
         self.penalty_coef = penalty_coef
+        self.max_gap = max_gap
 
         if logger is None:
             logger = logging.getLogger(__name__)
@@ -94,6 +107,7 @@ class LinearBICClustering(object):
 
         current_gaussian = None
         current_label = None
+        current_segment = None
 
         copy = starting_point.copy()
 
@@ -105,28 +119,40 @@ class LinearBICClustering(object):
 
             if current_gaussian is None:
                 current_gaussian = gaussian
+                current_segment = segment
                 current_label = starting_point[segment, track]
+                continue
+
+            gap = (current_segment ^ segment).duration
+            current_segment = segment
+
+            # stop merging if gap is large
+            if gap > self.max_gap:
+                current_gaussian = gaussian
+                current_label = label
                 continue
 
             delta_bic, merged_gaussian = current_gaussian.bic(
                 gaussian, penalty_coef=self.penalty_coef)
 
-            if delta_bic > 0.0:
-                TEMPLATE = (
-                    "Merging {cluster1} and {cluster2} with "
-                    "(BIC = {bic:g})."
-                )
-                message = TEMPLATE.format(
-                    cluster1=current_label,
-                    cluster2=label,
-                    bic=delta_bic)
-                self.logger.debug(message)
-
-                current_gaussian = merged_gaussian
-                copy[segment, track] = current_label
-
-            else:
+            # stop merging if similariy is small
+            if delta_bic < 0.0:
                 current_gaussian = gaussian
                 current_label = label
+                continue
+
+            # merge in any other situations
+            TEMPLATE = (
+                "Merging {cluster1} and {cluster2} with "
+                "(BIC = {bic:g})."
+            )
+            message = TEMPLATE.format(
+                cluster1=current_label,
+                cluster2=label,
+                bic=delta_bic)
+            self.logger.debug(message)
+
+            current_gaussian = merged_gaussian
+            copy[segment, track] = current_label
 
         return copy
