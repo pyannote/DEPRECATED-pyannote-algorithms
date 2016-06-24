@@ -1,3 +1,7 @@
+### Version 0.6.5 (2016-06-24)
+
+  - setup: update to pyannote.core 0.6.6
+
 ### Version 0.6.4 (2016-04-08)
 
   - feat: add max_gap parameters to linear BIC clustering
