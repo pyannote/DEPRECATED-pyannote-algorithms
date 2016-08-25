@@ -40,7 +40,7 @@ a unique `source` label translation or left unchanged.
 """
 
 from .base import BaseTagger
-from .mapping import HungarianMapper, ArgMaxMapper
+from .mapping import HungarianMapper, ArgMaxMapper, GreedyMapper
 
 
 class LabelTagger(BaseTagger):
@@ -115,6 +115,35 @@ class HungarianTagger(LabelTagger):
     def __init__(self, cost=None):
         mapper = HungarianMapper(cost=cost)
         super(HungarianTagger, self).__init__(mapper)
+
+
+class GreedyTagger(LabelTagger):
+    """Label tagging based on the Greedy label mapping algorithm.
+
+    Relies on the Greedy mapping algorithm to find the optimal one-to-one
+    mapping between `target` and `source` labels.
+
+    Parameters
+    ----------
+        cost : func
+        Cost function for Greedy mapping algorithms.
+        Defaults to cooccurrence matrix (A, B) --> A * B
+
+    Examples
+    --------
+        >>> tagger = GreedyTagger()
+        >>> tagged_target = tagger(source, target)
+
+    See Also
+    --------
+    :class:`LabelTagger`
+    :class:`pyannote.algorithm.mapping.hungarian.GreedyMapper`
+
+    """
+    def __init__(self, cost=None):
+        mapper = GreedyMapper(cost=cost)
+        super(GreedyTagger, self).__init__(mapper)
+
 
 
 class ArgMaxTagger(LabelTagger):
