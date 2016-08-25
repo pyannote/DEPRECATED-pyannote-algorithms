@@ -195,6 +195,10 @@ class HierarchicalAgglomerativeClustering(object):
         callback : function, optional
         """
 
+        # if starting point is empty, there is nothing to do.
+        if not starting_point:
+            return starting_point
+
         self._initialize(starting_point, features=features)
 
         for i, current_state in enumerate(self._iterate()):
