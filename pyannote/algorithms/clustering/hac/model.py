@@ -152,7 +152,7 @@ class HACModel(object):
 
         """
         _, n_j = self._similarity.shape
-        ij = int(self._similarity.argmax())
+        ij = np.argmax(self._similarity.data)
         i = ij // n_j
         j = ij % n_j
 
