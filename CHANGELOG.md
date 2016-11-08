@@ -1,3 +1,8 @@
+### Version 0.6.6 (2016-11-08)
+
+ - fix: fix hierarchical agglomerative clustering
+ - setup: update to pyannote.core 0.8
+
 ### Version 0.6.5 (2016-06-24)
 
   - setup: update to pyannote.core 0.6.6
