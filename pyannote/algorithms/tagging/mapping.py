@@ -31,6 +31,7 @@ from __future__ import unicode_literals
 import six
 from munkres import Munkres
 import networkx as nx
+import numpy as np
 
 
 class BaseMapper(object):
@@ -154,7 +155,7 @@ class GreedyMapper(BaseMapper):
 
         for i in range(N):
 
-            ab = int(matrix.argmax())
+            ab = np.argmax(matrix.data)
             a = ab // (Nb-i)
             b = ab % (Nb-i)
 

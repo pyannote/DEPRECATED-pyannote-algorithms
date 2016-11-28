@@ -1,3 +1,7 @@
+### Version 0.6.7 (2016-11-29)
+
+  - fix: fix greedy label mapper
+
 ### Version 0.6.6 (2016-11-08)
 
  - fix: fix hierarchical agglomerative clustering
