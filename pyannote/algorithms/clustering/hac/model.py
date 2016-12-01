@@ -105,7 +105,7 @@ class HACModel(object):
         clusters = list(self._models)
 
         try:
-            self._similarity = self.compute_similarity_matrix(parent=None)
+            self._similarity = self.compute_similarity_matrix(parent=parent)
             for cluster in clusters:
                 self._similarity.loc[cluster, cluster] = -np.inf
 
