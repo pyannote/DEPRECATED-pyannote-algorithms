@@ -29,8 +29,9 @@
 
 from __future__ import unicode_literals
 
-from .hac import HierarchicalAgglomerativeClustering
-from .model import HACModel
+from pyannote.algorithms.clustering.hac.hac import HierarchicalAgglomerativeClustering
+from pyannote.algorithms.clustering.hac.model import HACModel
+from pyannote.algorithms.clustering.hac.stop import SimilarityThreshold
 
 
 class _LinkageModel(HACModel):
@@ -39,15 +40,18 @@ class _LinkageModel(HACModel):
         super(_LinkageModel, self).__init__(
             is_symmetric=is_symmetric)
 
+    def compute_similarity_matrix(self, parent=None):
+        return parent.features.copy()
+
     def compute_model(self, cluster, parent=None):
-        return tuple([cluster])
+        return [cluster]
 
     def compute_merged_model(self, clusters, parent=None):
 
         merged_model = []
         for cluster in clusters:
-            merged_model.extent(self[cluster])
-        return tuple(merged_model)
+            merged_model.extend(self[cluster])
+        return list(merged_model)
 
 
 class CompleteLinkageModel(_LinkageModel):
@@ -64,12 +68,12 @@ class SingleLinkageModel(_LinkageModel):
 
 class CompleteLinkageClustering(HierarchicalAgglomerativeClustering):
 
-    def __init__(self, threshold, force=False):
+    def __init__(self, threshold, force=False, logger=None):
         model = CompleteLinkageModel()
         stopping_criterion = SimilarityThreshold(
             threshold=threshold, force=force)
         super(CompleteLinkageClustering, self).__init__(
-            model, stopping_criterion=stopping_criterion)
+            model, stopping_criterion=stopping_criterion, logger=logger)
 
     def __call__(self, starting_point, precomputed, callback=None):
         """
@@ -83,12 +87,12 @@ class CompleteLinkageClustering(HierarchicalAgglomerativeClustering):
 
 class AverageLinkageClustering(HierarchicalAgglomerativeClustering):
 
-    def __init__(self, threshold=None, force=False):
+    def __init__(self, threshold=None, force=False, logger=None):
         model = AverageLinkageModel()
         stopping_criterion = SimilarityThreshold(
             threshold=threshold, force=force)
         super(AverageLinkageClustering, self).__init__(
-            model, stopping_criterion=stopping_criterion)
+            model, stopping_criterion=stopping_criterion, logger=logger)
 
     def __call__(self, starting_point, precomputed, callback=None):
         """
@@ -102,12 +106,12 @@ class AverageLinkageClustering(HierarchicalAgglomerativeClustering):
 
 class SingleLinkageClustering(HierarchicalAgglomerativeClustering):
 
-    def __init__(self, threshold=None, force=False):
+    def __init__(self, threshold=None, force=False, logger=None):
         model = SingleLinkageModel()
         stopping_criterion = SimilarityThreshold(
             threshold=threshold, force=force)
         super(SingleLinkageClustering, self).__init__(
-            model, stopping_criterion=stopping_criterion)
+            model, stopping_criterion=stopping_criterion, logger=logger)
 
     def __call__(self, starting_point, precomputed, callback=None):
         """
@@ -116,4 +120,4 @@ class SingleLinkageClustering(HierarchicalAgglomerativeClustering):
             Precomputed cluster similarity matrix
         """
         return super(SingleLinkageClustering, self).__call__(
-            starting_point, feature=precomputed, callback=callback)
+            starting_point, features=precomputed, callback=callback)

@@ -124,7 +124,7 @@ class HierarchicalAgglomerativeClustering(object):
 
         while True:
 
-            if len(self._current_state.labels()) < 2:
+            if len(self.model._models) < 2:
                 break
 
             while True:
@@ -194,6 +194,10 @@ class HierarchicalAgglomerativeClustering(object):
         features : Feature, optional
         callback : function, optional
         """
+
+        # if starting point is empty, there is nothing to do.
+        if not starting_point:
+            return starting_point
 
         self._initialize(starting_point, features=features)
 

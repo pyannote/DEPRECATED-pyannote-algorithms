@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2016 CNRS
+# Copyright (c) 2012-2017 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -63,9 +63,19 @@ class BICModel(HACModel):
 
 
 class BICClustering(HierarchicalAgglomerativeClustering):
+    """
 
-    def __init__(self, covariance_type='full', penalty_coef=3.5,
+    Parameters
+    ----------
+    covariance_type : {'diag', 'full'}, optional
+    penalty_coef : float, optional
+    """
+
+    def __init__(self, covariance_type='diag', penalty_coef=3.5,
                  logger=None, force=False):
+
+        self.covariance_type = covariance_type
+        self.penalty_coef = penalty_coef
 
         model = BICModel(covariance_type=covariance_type,
                          penalty_coef=penalty_coef)
