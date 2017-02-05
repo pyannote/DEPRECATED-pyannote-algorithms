@@ -48,6 +48,7 @@ setup(
         'docopt >= 0.6.2',
         'joblib >= 0.9.4',
         'xarray >= 0.8.2',
+        'sortedcollections >= 0.4.2',
         'six >= 1.10.0',
     ],
     # versioneer

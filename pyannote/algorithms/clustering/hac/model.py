@@ -29,10 +29,25 @@ from __future__ import unicode_literals
 
 import numpy as np
 from itertools import combinations, product
-from xarray import DataArray
+from sortedcollections import ValueSortedDict
+
 
 class HACModel(object):
-    """"""
+    """
+
+    Parameters
+    ----------
+    is_symmetric : bool, optional
+        Defaults to False
+
+
+    Attributes
+    ----------
+
+    _similarity : ValueSortedDict
+    _models : dict
+
+    """
 
     def __init__(self, is_symmetric=False):
         super(HACModel, self).__init__()
@@ -98,47 +113,35 @@ class HACModel(object):
 
     def initialize(self, parent=None):
 
+        # one model per cluster in current_state
         self._models = {}
         for cluster in parent.current_state.labels():
             self._models[cluster] = self.compute_model(cluster, parent=parent)
 
+        # list of clusters
         clusters = list(self._models)
 
         try:
             self._similarity = self.compute_similarity_matrix(parent=parent)
-            for cluster in clusters:
-                self._similarity.loc[cluster, cluster] = -np.inf
 
         except NotImplementedError as e:
 
             n_clusters = len(clusters)
 
-            # initialize similarity at -infinity
-            self._similarity = DataArray(
-                -np.inf * np.ones((n_clusters, n_clusters)),
-                [('i', clusters), ('j', clusters)])
+            self._similarity = ValueSortedDict()
 
-            if self.is_symmetric:
-                for i, j in combinations(clusters, 2):
+            for i, j in combinations(clusters, 2):
 
-                    # compute similarity if (and only if) clusters are mergeable
-                    if not parent.constraint.mergeable([i, j], parent=parent):
-                        continue
+                # compute similarity if (and only if) clusters are mergeable
+                if not parent.constraint.mergeable([i, j], parent=parent):
+                    continue
 
-                    similarity = self.compute_similarity(i, j, parent=parent)
+                similarity = self.compute_similarity(i, j, parent=parent)
+                self._similarity[i, j] = similarity
 
-                    self._similarity.loc[i, j] = similarity
-                    self._similarity.loc[j, i] = similarity
-            else:
-                for i, j in product(clusters, repeat=2):
-
-                    # compute similarity if (and only if) clusters are mergeable
-                    if not parent.constraint.mergeable([i, j], parent=parent):
-                        continue
-
-                    similarity = self.compute_similarity(i, j, parent=parent)
-
-                    self._similarity.loc[i, j] = similarity
+                if not self.is_symmetric:
+                    similarity = self.compute_similarity(j, i, parent=parent)
+                    self._similarity[j, i] = similarity
 
     # NOTE - for now this (get_candidates / block) combination assumes
     # that we merge clusters two-by-two...
@@ -151,16 +154,7 @@ class HACModel(object):
         similarity : float
 
         """
-        _, n_j = self._similarity.shape
-        ij = np.argmax(self._similarity.data)
-        i = ij // n_j
-        j = ij % n_j
-
-        similarity = self._similarity[i, j].item()
-        clusters = [self._similarity.coords['i'][i].item(),
-                    self._similarity.coords['j'][j].item()]
-
-        return clusters, similarity
+        return self._similarity.peekitem(index=-1)
 
     def block(self, clusters, parent=None):
         if len(clusters) > 2:
@@ -168,8 +162,8 @@ class HACModel(object):
                 'Constrained clustering merging 3+ clusters is not supported.'
             )
         i, j = clusters
-        self._similarity.loc[i, j] = -np.inf
-        self._similarity.loc[j, i] = -np.inf
+        self._similarity.pop((i, j), default=None)
+        self._similarity.pop((j, i), default=None)
 
     def update(self, merged_clusters, into, parent=None):
 
@@ -181,7 +175,10 @@ class HACModel(object):
         removed_clusters = list(set(merged_clusters) - set([into]))
         for cluster in removed_clusters:
             del self._models[cluster]
-        self._similarity = self._similarity.drop(removed_clusters, dim='i').drop(removed_clusters, dim='j')
+
+        for i, j in product(removed_clusters, self._models):
+            self._similarity.pop((i, j), default=None)
+            self._similarity.pop((j, i), default=None)
 
         # compute new similarities
         # * all at once if model implements compute_similarities
@@ -191,33 +188,25 @@ class HACModel(object):
 
         try:
 
-            if remaining_clusters:
-                # all at once (when available)
-                similarity = self.compute_similarities(
-                    into, remaining_clusters, dim='j', parent=parent)
-                self._similarity.loc[into, remaining_clusters] = similarity
-                if self.is_symmetric:
-                    similarity = similarity.rename({'j': 'i'})
-                else:
-                    similarity = self.compute_similarities(
-                        into, remaining_clusters, dim='i', parent=parent)
-                self._similarity.loc[remaining_clusters, into] = similarity
+            # all at once (when available)
+            similarities = self.compute_similarities(
+                into, remaining_clusters, parent=parent)
 
         except NotImplementedError as e:
 
-            if remaining_clusters:
-                self._similarity.loc[into, remaining_clusters] = -np.inf
-                self._similarity.loc[remaining_clusters, into] = -np.inf
+            similarities = dict()
 
             for cluster in remaining_clusters:
 
                 # compute similarity if (and only if) clusters are mergeable
-                if parent.constraint.mergeable([into, cluster], parent=parent):
-                    similarity = self.compute_similarity(
-                        into, cluster, parent=parent)
-                    self._similarity.loc[into, cluster] = similarity
+                if not parent.constraint.mergeable([into, cluster], parent=parent):
+                    continue
 
-                    if not self.is_symmetric:
-                        similarity = self.compute_similarity(
-                            cluster, into, parent=parent)
-                    self._similarity.loc[cluster, into] = similarity
+                similarities[into, cluster] = self.compute_similarity(
+                    into, cluster, parent=parent)
+
+                if not self.is_symmetric:
+                    similarities[cluster, into] = self.compute_similarity(
+                        cluster, into, parent=parent)
+
+            self._similarity.update(similarities)
