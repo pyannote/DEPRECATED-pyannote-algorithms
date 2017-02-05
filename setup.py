@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2014-2016 CNRS
+# Copyright (c) 2014-2017 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -39,8 +39,8 @@ setup(
         'scripts/pyannote_hmm.py',
     ],
     install_requires=[
-        'pyannote.core >= 0.8',
-        'pyannote.parser >= 0.4.2',
+        'pyannote.core >= 0.13',
+        'pyannote.parser >= 0.6.5',
         'scikit-learn >= 0.17',
         'scipy >= 0.17.0',
         'networkx >= 1.11',
