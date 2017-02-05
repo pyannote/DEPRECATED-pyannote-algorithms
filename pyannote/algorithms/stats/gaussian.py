@@ -42,6 +42,28 @@ class Gaussian(object):
         super(Gaussian, self).__init__()
         self.covariance_type = covariance_type
 
+    def __set_mean(self, mean):
+        """Set mean and reset its square"""
+        self._mean = mean
+        self._mean_square = None
+
+    def __get_mean(self):
+        """Get mean"""
+        return self._mean
+
+    mean = property(fset=__set_mean, fget=__get_mean)
+    """Mean"""
+
+    def __get_mean_square(self):
+        """Pre-compute and/or return pre-computed mean square"""
+        if self._mean_square is None:
+            mean = self.mean.reshape((1, -1))
+            self._mean_square = np.dot(mean.T, mean)
+        return self._mean_square
+
+    mean_square = property(fget=__get_mean_square)
+    """Mean square"""
+
     def __set_covar(self, covar):
         """Set covariance and reset its inverse & log-determinant"""
         self._covar = covar
@@ -58,12 +80,8 @@ class Gaussian(object):
     def __get_inv_covar(self):
         """Pre-compute and/or return pre-computed inverse of covariance"""
 
-        # if it is computed already, returns it
-        if self._inv_covar is not None:
-            return self._inv_covar
-
-        # otherwise, we need to compute and store it before returning it
-        self._inv_covar = np.linalg.inv(self.covar)
+        if self._inv_covar is None:
+            self._inv_covar = np.linalg.inv(self.covar)
         return self._inv_covar
 
     inv_covar = property(fget=__get_inv_covar)
@@ -72,12 +90,8 @@ class Gaussian(object):
     def __get_log_det_covar(self):
         """Pre-compute and/or return pre-computed log |covar|"""
 
-        # if it is computed already, returns it
-        if self._log_det_covar is not None:
-            return self._log_det_covar
-
-        # otherwise, we need to compute and store it before returning it
-        _, self._log_det_covar = np.linalg.slogdet(self.covar)
+        if self._log_det_covar is None:
+            _, self._log_det_covar = np.linalg.slogdet(self.covar)
 
         return self._log_det_covar
 
@@ -112,28 +126,24 @@ class Gaussian(object):
         g.n_samples = n
 
         if n1 == 0:
-
             g.mean = other.mean
             g.covar = other.covar
 
         elif n2 == 0:
-
             g.mean = self.mean
             g.covar = self.covar
 
         else:
 
             # mean
-            m1 = self.mean.reshape((1, -1))
-            m2 = other.mean.reshape((1, -1))
-            m = (n1 * m1 + n2 * m2) / n
-            g.mean = m
+            m = (n1 * self.mean + n2 * other.mean) / n
+            g.mean = m.reshape((1, -1))
 
             # covariance
             k1 = self.covar
             k2 = other.covar
-            k = 1. / n * (n1 * (k1 + np.dot(m1.T, m1)) +
-                          n2 * (k2 + np.dot(m2.T, m2))) \
+            k = 1. / n * (n1 * (k1 + self.mean_square) +
+                          n2 * (k2 + other.mean_square)) \
                 - np.dot(m.T, m)
 
             # make it diagonal if needed
