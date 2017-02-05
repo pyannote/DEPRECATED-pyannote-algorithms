@@ -32,8 +32,6 @@ import six.moves
 import numpy as np
 import itertools
 
-from pyannote.core import Unknown
-
 
 class LabelConverter(object):
     """
@@ -106,7 +104,7 @@ class SKLearnMixin:
     Extract SKLearn data/labels from PyAnnote features/annotation
     """
 
-    def X(self, features, annotation=None, unknown='keep'):
+    def X(self, features, annotation=None):
 
         if annotation is None:
             return features.data
@@ -114,46 +112,31 @@ class SKLearnMixin:
         X = []
         for segment, _, label in annotation.itertracks(label=True):
 
-            if isinstance(label, Unknown) and unknown == 'ignore':
-                continue
-
             _X = features.crop(segment)
             X.append(_X)
 
         return np.vstack(X)
 
-    def X_iter(self, features_iter, annotation_iter=None, unknown='keep'):
+    def X_iter(self, features_iter, annotation_iter=None):
 
         if annotation_iter is None:
             annotation_iter = itertools.repeat(None)
 
         for features, annotation in six.moves.zip(features_iter, annotation_iter):
-            yield self.X(features, annotation=annotation, unknown=unknown)
+            yield self.X(features, annotation=annotation)
 
-    def X_stack(self, features_iter, annotation_iter=None, unknown='keep'):
+    def X_stack(self, features_iter, annotation_iter=None):
 
         X = []
-        for _X in self.X_iter(features_iter, annotation_iter=annotation_iter,
-                              unknown=unknown):
+        for _X in self.X_iter(features_iter, annotation_iter=annotation_iter):
             X.append(_X)
 
         return np.vstack(X)
 
-    def Xy(self, features, annotation, unknown='keep'):
+    def Xy(self, features, annotation):
 
         X, y = [], []
         for segment, _, label in annotation.itertracks(label=True):
-
-            if isinstance(label, Unknown):
-
-                # ignore segment with unknown label
-                if unknown == 'ignore':
-                    continue
-
-                # merge
-                if unknown == 'unique':
-                    label = None
-
             _X = features.crop(segment)
             _y = [label] * _X.shape[0]
 
@@ -162,15 +145,14 @@ class SKLearnMixin:
 
         return np.vstack(X), y
 
-    def Xy_iter(self, features_iter, annotation_iter, unknown='keep'):
+    def Xy_iter(self, features_iter, annotation_iter):
 
         for features, annotation in six.moves.zip(features_iter, annotation_iter):
-            yield self.Xy(features, annotation, unknown=unknown)
+            yield self.Xy(features, annotation)
 
-    def Xy_stack(self, features_iter, annotation_iter, unknown='keep'):
+    def Xy_stack(self, features_iter, annotation_iter):
         X, y = [], []
-        for _X, _y in self.Xy_iter(features_iter, annotation_iter,
-                                   unknown=unknown):
+        for _X, _y in self.Xy_iter(features_iter, annotation_iter):
             X.append(_X)
             y.extend(_y)
 
