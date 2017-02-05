@@ -1,3 +1,8 @@
+### Version 0.7 (2017-02-05)
+
+  - improve: faster hierarchical agglomerative clustering
+  - setup: switch to pyannote.core 0.13
+
 ### Version 0.6.7 (2016-11-29)
 
   - fix: fix greedy label mapper
