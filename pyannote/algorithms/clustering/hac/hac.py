@@ -124,7 +124,7 @@ class HierarchicalAgglomerativeClustering(object):
 
         while True:
 
-            if len(self._current_state.labels()) < 2:
+            if len(self.model._models) < 2:
                 break
 
             while True:
