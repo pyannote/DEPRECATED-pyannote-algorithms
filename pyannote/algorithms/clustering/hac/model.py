@@ -141,7 +141,8 @@ class HACModel(object):
 
                 if not self.is_symmetric:
                     similarity = self.compute_similarity(j, i, parent=parent)
-                    self._similarity[j, i] = similarity
+
+                self._similarity[j, i] = similarity
 
     # NOTE - for now this (get_candidates / block) combination assumes
     # that we merge clusters two-by-two...
@@ -202,11 +203,11 @@ class HACModel(object):
                 if not parent.constraint.mergeable([into, cluster], parent=parent):
                     continue
 
-                similarities[into, cluster] = self.compute_similarity(
-                    into, cluster, parent=parent)
+                similarity = self.compute_similarity(into, cluster, parent=parent)
+                similarities[into, cluster] = similarity
 
                 if not self.is_symmetric:
-                    similarities[cluster, into] = self.compute_similarity(
-                        cluster, into, parent=parent)
+                    similarity = self.compute_similarity(cluster, into, parent=parent)
+                similarities[cluster, into] = similarity
 
             self._similarity.update(similarities)
