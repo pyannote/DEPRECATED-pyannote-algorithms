@@ -159,7 +159,7 @@ class HierarchicalAgglomerativeClustering(object):
 
             # == update annotation (rename merged clusters)
             mapping = {cluster: into for cluster in clusters}
-            self._current_state = self._current_state % mapping
+            self._current_state = self._current_state.rename_labels(mapping=mapping, copy=True)
 
             # == update history (keep track of this iteration)
             self._history.add_iteration(

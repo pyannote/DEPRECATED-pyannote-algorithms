@@ -169,7 +169,7 @@ class HACHistory(object):
                 mapping[cluster] = clusters[0]
 
         # actual mapping
-        return self.starting_point.rename_labels(mapping, copy=True)
+        return self.starting_point.rename_labels(mapping=mapping, copy=True)
 
     def __iter__(self):
         """"""
