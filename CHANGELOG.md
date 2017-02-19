@@ -1,3 +1,8 @@
+### Version 0.7.3 (2017-02-19)
+
+  - fix: fix clustering constraints
+  - chore: simplify HACModel API
+
 ### Version 0.7.2 (2017-02-05)
 
   - improve: faster hierarchical agglomerative clustering
