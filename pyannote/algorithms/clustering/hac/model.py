@@ -134,6 +134,8 @@ class HACModel(object):
 
                 # compute similarity if (and only if) clusters are mergeable
                 if not parent.constraint.mergeable([i, j], parent=parent):
+                    self._similarity[i, j] = -np.inf
+                    self._similarity[j, i] = -np.inf
                     continue
 
                 similarity = self.compute_similarity(i, j, parent=parent)
@@ -163,8 +165,8 @@ class HACModel(object):
                 'Constrained clustering merging 3+ clusters is not supported.'
             )
         i, j = clusters
-        self._similarity.pop((i, j), default=None)
-        self._similarity.pop((j, i), default=None)
+        self._similarity[i, j] = -np.inf
+        self._similarity[j, i] = -np.inf
 
     def update(self, merged_clusters, into, parent=None):
 
@@ -186,6 +188,9 @@ class HACModel(object):
         # * one by one otherwise
 
         remaining_clusters = list(set(self._models) - set([into]))
+
+        if not remaining_clusters:
+            return
 
         try:
 
@@ -210,4 +215,4 @@ class HACModel(object):
                     similarity = self.compute_similarity(cluster, into, parent=parent)
                 similarities[cluster, into] = similarity
 
-            self._similarity.update(similarities)
+        self._similarity.update(similarities)
