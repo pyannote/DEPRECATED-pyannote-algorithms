@@ -3,7 +3,7 @@
 
 # The MIT License (MIT)
 
-# Copyright (c) 2012-2016 CNRS
+# Copyright (c) 2012-2017 CNRS
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -29,6 +29,8 @@
 
 from __future__ import unicode_literals
 
+import itertools
+import numpy as np
 from pyannote.algorithms.clustering.hac.hac import HierarchicalAgglomerativeClustering
 from pyannote.algorithms.clustering.hac.model import HACModel
 from pyannote.algorithms.clustering.hac.stop import SimilarityThreshold
@@ -47,24 +49,27 @@ class _LinkageModel(HACModel):
         return [cluster]
 
     def compute_merged_model(self, clusters, parent=None):
-
         merged_model = []
         for cluster in clusters:
             merged_model.extend(self[cluster])
         return list(merged_model)
 
-
 class CompleteLinkageModel(_LinkageModel):
     def compute_similarity(self, cluster1, cluster2, parent=None):
-        return parent.features.loc[self[cluster1], self[cluster2]].min().item()
+        return np.min([parent.features[c1, c2]
+                      for c1, c2 in itertools.product(self[cluster1], self[cluster2])])
 
 class AverageLinkageModel(_LinkageModel):
     def compute_similarity(self, cluster1, cluster2, parent=None):
-        return parent.features.loc[self[cluster1], self[cluster2]].mean().item()
+        similarities = [
+            parent.features[c1, c2]
+            for c1, c2 in itertools.product(self[cluster1], self[cluster2])]
+        return np.mean(similarities)
 
 class SingleLinkageModel(_LinkageModel):
     def compute_similarity(self, cluster1, cluster2, parent=None):
-        return parent.features.loc[self[cluster1], self[cluster2]].max().item()
+        return np.max([parent.features[c1, c2]
+                      for c1, c2 in itertools.product(self[cluster1], self[cluster2])])
 
 class CompleteLinkageClustering(HierarchicalAgglomerativeClustering):
 
@@ -78,7 +83,7 @@ class CompleteLinkageClustering(HierarchicalAgglomerativeClustering):
     def __call__(self, starting_point, precomputed, callback=None):
         """
         starting_point : Annotation
-        precomputed : xarray.DataArray
+        precomputed : ValueSortedDict
             Precomputed cluster similarity matrix
         """
         return super(CompleteLinkageClustering, self).__call__(
@@ -97,7 +102,7 @@ class AverageLinkageClustering(HierarchicalAgglomerativeClustering):
     def __call__(self, starting_point, precomputed, callback=None):
         """
         starting_point : Annotation
-        precomputed : xarray.DataArray
+        precomputed : ValueSortedDict
             Precomputed cluster similarity matrix
         """
         return super(AverageLinkageClustering, self).__call__(
@@ -116,7 +121,7 @@ class SingleLinkageClustering(HierarchicalAgglomerativeClustering):
     def __call__(self, starting_point, precomputed, callback=None):
         """
         starting_point : Annotation
-        precomputed : xarray.DataArray
+        precomputed : ValueSortedDict
             Precomputed cluster similarity matrix
         """
         return super(SingleLinkageClustering, self).__call__(

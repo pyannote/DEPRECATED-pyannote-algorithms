@@ -129,6 +129,7 @@ class DoNotCooccur(HACConstraint):
             self._cooccur.loc[j, i] = 1
 
     def mergeable(self, clusters, parent=None):
+        clusters = list(clusters)
         return self._cooccur.loc[clusters, clusters].sum().item() == 0.
 
     def update(self, merged_clusters, new_cluster, parent=None):
@@ -185,6 +186,7 @@ class CloseInTime(HACConstraint):
         self._neighbours = self._neighbours.drop(_clusters, dim='i').drop(_clusters, dim='j')
 
     def mergeable(self, clusters, parent=None):
+        clusters = list(clusters)
         return connected_components(
             self._neighbours.loc[clusters, clusters],
             directed=False, return_labels=False) == 1

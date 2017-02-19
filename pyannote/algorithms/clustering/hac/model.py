@@ -77,39 +77,20 @@ class HACModel(object):
     def compute_merged_model(self, clusters, parent=None):
         raise NotImplementedError('Missing method compute_merged_model')
 
-    # 1 vs. 1 similarity/distance
-
-    def compute_distance(self, cluster1, cluster2, parent=None):
-        raise NotImplementedError('')
+    # 1 vs. 1 similarity
 
     def compute_similarity(self, cluster1, cluster2, parent=None):
-        try:
-            return -self.compute_distance(cluster1, cluster2, parent=parent)
-        except NotImplementedError as e:
-            # one must implement one of compute_similarity & compute_distance
-            raise NotImplementedError('Missing method compute_similarity')
+        raise NotImplementedError('Missing method compute_similarity')
 
-    # 1 vs. N similarity/distance
+    # 1 vs. N similarity
 
-    def compute_distances(self, cluster, clusters, dim='i', parent=None):
+    def compute_similarities(self, cluster, clusters, parent=None):
         raise NotImplementedError('')
 
-    def compute_similarities(self, cluster, clusters, dim='i', parent=None):
-        try:
-            return -self.compute_distances(cluster, clusters, dim=dim, parent=parent)
-        except NotImplementedError as e:
-            raise NotImplementedError('')
-
-    # N vs. N similarity/distance
-
-    def compute_distance_matrix(self, parent=None):
-        raise NotImplementedError('')
+    # N vs. N similarity
 
     def compute_similarity_matrix(self, parent=None):
-        try:
-            return -self.compute_distance_matrix(parent=parent)
-        except NotImplementedError as e:
-            raise NotImplementedError('')
+        raise NotImplementedError('')
 
     def initialize(self, parent=None):
 
@@ -134,6 +115,8 @@ class HACModel(object):
 
                 # compute similarity if (and only if) clusters are mergeable
                 if not parent.constraint.mergeable([i, j], parent=parent):
+                    self._similarity[i, j] = -np.inf
+                    self._similarity[j, i] = -np.inf
                     continue
 
                 similarity = self.compute_similarity(i, j, parent=parent)
@@ -163,8 +146,8 @@ class HACModel(object):
                 'Constrained clustering merging 3+ clusters is not supported.'
             )
         i, j = clusters
-        self._similarity.pop((i, j), default=None)
-        self._similarity.pop((j, i), default=None)
+        self._similarity[i, j] = -np.inf
+        self._similarity[j, i] = -np.inf
 
     def update(self, merged_clusters, into, parent=None):
 
@@ -186,6 +169,9 @@ class HACModel(object):
         # * one by one otherwise
 
         remaining_clusters = list(set(self._models) - set([into]))
+
+        if not remaining_clusters:
+            return
 
         try:
 
@@ -210,4 +196,4 @@ class HACModel(object):
                     similarity = self.compute_similarity(cluster, into, parent=parent)
                 similarities[cluster, into] = similarity
 
-            self._similarity.update(similarities)
+        self._similarity.update(similarities)
