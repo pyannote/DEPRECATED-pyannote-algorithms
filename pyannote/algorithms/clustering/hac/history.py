@@ -164,9 +164,10 @@ class HACHistory(object):
         # ordered connected component
         mapping = {}
         for clusters in connected_components(g.to_undirected()):
-            clusters = topological_sort(g, nbunch=clusters, reverse=True)
-            for cluster in clusters[1:]:
-                mapping[cluster] = clusters[0]
+            klusters = list(reversed(list(
+                topological_sort(g.subgraph(clusters)))))
+            for cluster in klusters[1:]:
+                mapping[cluster] = klusters[0]
 
         # actual mapping
         return self.starting_point.rename_labels(mapping=mapping, copy=True)
