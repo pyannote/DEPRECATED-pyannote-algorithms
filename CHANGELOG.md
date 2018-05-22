@@ -1,3 +1,9 @@
+### Version 0.8 (2018-05-22)
+
+  - setup: switch to sortedcollections 1.x
+  - setup: switch to pyannote.core 1.3.x
+  - fix: fix support for networkx 2.x
+
 ### Version 0.7.3 (2017-02-19)
 
   - fix: fix clustering constraints
