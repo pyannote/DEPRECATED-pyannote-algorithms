@@ -140,6 +140,18 @@ class HACModel(object):
         """
         return self._similarity.peekitem(index=-1)
 
+    def get_new_similarity_matrix(self, removed_clusters):
+        # collect old similarity indexes
+        s = set(product(removed_clusters, self._models))
+        s.update(set(product(self._models, removed_clusters)))
+
+        new_matrix = ValueSortedDict()
+
+        for key in self._similarity:
+            if key not in s:
+                new_matrix[key] = self._similarity[key]
+        return new_matrix
+
     def block(self, clusters, parent=None):
         if len(clusters) > 2:
             raise NotImplementedError(
@@ -160,9 +172,8 @@ class HACModel(object):
         for cluster in removed_clusters:
             del self._models[cluster]
 
-        for i, j in product(removed_clusters, self._models):
-            self._similarity.pop((i, j), default=None)
-            self._similarity.pop((j, i), default=None)
+        # remove old indexes from similarity matrix
+        self._similarity = self.get_new_similarity_matrix(removed_clusters)
 
         # compute new similarities
         # * all at once if model implements compute_similarities
